@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"github.com/pkg/errors"
 )
 
 type PdfWriter struct {
@@ -28,17 +29,17 @@ func (this *PdfWriter) Init() {
 	this.tpls = make([]*PdfTemplate, 1)
 }
 
-func NewPdfWriter(filename string) *PdfWriter {
+func NewPdfWriter(filename string) (*PdfWriter, error) {
 	var err error
 	//f, err := os.Open(filename)
 	if err != nil {
-		panic(err)
+		return nil, errors.Wrap(err, "Unable to open filename: " + filename)
 	}
 
 	writer := &PdfWriter{}
 	writer.Init()
 	//writer.f = f
-	return writer
+	return writer, nil
 }
 
 // Done with parsing.  Now, create templates.
@@ -59,7 +60,9 @@ type PdfTemplate struct {
 var k float64
 
 // Create a PdfTemplate object from a page number (e.g. 1) and a boxName (e.g. MediaBox)
-func (this *PdfWriter) importPage(reader *PdfReader, pageno int, boxName string) *PdfTemplate {
+func (this *PdfWriter) importPage(reader *PdfReader, pageno int, boxName string) (*PdfTemplate, error) {
+	var err error
+
 	// TODO: Improve error handling
 	/*
 		if !in_array(boxName, availableBoxes) {
@@ -71,7 +74,10 @@ func (this *PdfWriter) importPage(reader *PdfReader, pageno int, boxName string)
 	k = 1
 
 	// Get all page boxes
-	pageBoxes := reader.getPageBoxes(1, k)
+	pageBoxes, err := reader.getPageBoxes(1, k)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to get page boxes")
+	}
 
 	// If requested box name does not exist for this page, use an alternate box
 	if _, ok := pageBoxes[boxName]; !ok {
@@ -85,14 +91,24 @@ func (this *PdfWriter) importPage(reader *PdfReader, pageno int, boxName string)
 	// If the requested box name or an alternate box name cannot be found, trigger an error
 	// TODO: Improve error handling
 	if _, ok := pageBoxes[boxName]; !ok {
-		panic("Box not found: " + boxName)
+		return nil, errors.New("Box not found: " + boxName)
+	}
+
+	pageResources, err := reader.getPageResources(pageno)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to get page resources")
+	}
+
+	content, err := reader.getContent(pageno)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to get content")
 	}
 
 	// Set template values
 	tpl := &PdfTemplate{}
 	tpl.Reader = reader
-	tpl.Resources = reader.getPageResources(pageno)
-	tpl.Buffer = reader.getContent(1)
+	tpl.Resources = pageResources
+	tpl.Buffer = content
 	tpl.Box = pageBoxes[boxName]
 	tpl.Boxes = pageBoxes
 	tpl.X = 0
@@ -101,7 +117,10 @@ func (this *PdfWriter) importPage(reader *PdfReader, pageno int, boxName string)
 	tpl.H = tpl.Box["h"]
 
 	// Set template rotation
-	rotation := reader.getPageRotation(pageno)
+	rotation, err := reader.getPageRotation(pageno)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to get page rotation")
+	}
 	angle := rotation.Int % 360
 
 	// Normalize angle
@@ -127,7 +146,7 @@ func (this *PdfWriter) importPage(reader *PdfReader, pageno int, boxName string)
 
 	this.tpls[0] = tpl
 
-	return tpl
+	return tpl, nil
 }
 
 // Create a new object and keep track of the offset for the xref table
@@ -237,7 +256,9 @@ func (this *PdfWriter) writeValue(value *PdfValue) {
 }
 
 // Output Form XObjects (1 for each template)
-func (this *PdfWriter) putFormXobjects(reader *PdfReader) {
+func (this *PdfWriter) putFormXobjects(reader *PdfReader) error {
+	var err error
+
 	compress := true
 	filter := ""
 	if compress {
@@ -319,7 +340,7 @@ func (this *PdfWriter) putFormXobjects(reader *PdfReader) {
 		if tpl.Resources != nil {
 			this.writeValue(tpl.Resources) // "n" will be changed
 		} else {
-			panic("what to do here?")
+			return errors.New("Template resources are empty")
 		}
 
 		nN := this.n // remember new "n"
@@ -335,11 +356,19 @@ func (this *PdfWriter) putFormXobjects(reader *PdfReader) {
 
 		// Put imported objects, starting with the ones from the XObject's Resources,
 		// then from dependencies of those resources).
-		this.putImportedObjects(reader)
+		err = this.putImportedObjects(reader)
+		if err != nil {
+			return errors.Wrap(err, "Failed to put imported objects")
+		}
 	}
+
+	return nil
 }
 
-func (this *PdfWriter) putImportedObjects(reader *PdfReader) {
+func (this *PdfWriter) putImportedObjects(reader *PdfReader) error {
+	var err error
+	var nObj *PdfValue
+
 	// obj_stack will have new items added to it in the inner loop, so do another loop to check for extras
 	// TODO make the order of this the same every time
 	for {
@@ -351,7 +380,10 @@ func (this *PdfWriter) putImportedObjects(reader *PdfReader) {
 
 			atLeastOne = true
 
-			nObj := reader.resolveObject(v)
+			nObj, err = reader.resolveObject(v)
+			if err != nil {
+				return errors.Wrap(err, "Unable to resolve object")
+			}
 
 			// New object with "NewId" field
 			this.newObj(v.NewId, false)
@@ -372,6 +404,8 @@ func (this *PdfWriter) putImportedObjects(reader *PdfReader) {
 			break
 		}
 	}
+
+	return nil
 }
 
 // Get the calculated size of a template
@@ -441,18 +475,32 @@ func (this *PdfWriter) useTemplate(tpl *PdfTemplate, tplid int, _x float64, _y f
 	return result
 }
 
-func Demo() {
+func Demo() error {
+	var err error
+
 	// Create new reader
-	reader := NewPdfReader("/Users/dave/Desktop/PDFPL110.pdf")
+	reader, err := NewPdfReader("/Users/dave/Desktop/PDFPL110.pdf")
+	if err != nil {
+		return errors.Wrap(err, "Unable to create new pdf reader")
+	}
 
 	// Create new writer
-	writer := NewPdfWriter("/Users/dave/Desktop/pdfwriter-output.pdf")
+	writer, err := NewPdfWriter("/Users/dave/Desktop/pdfwriter-output.pdf")
+	if err != nil {
+		return errors.Wrap(err, "Unable to create new pdf writer")
+	}
 
-	tpl := writer.importPage(reader, 1, "/CropBox")
+	tpl, err := writer.importPage(reader, 1, "/CropBox")
+	if err != nil {
+		return errors.Wrap(err, "Unable to import page")
+	}
 
 	writer.out("%PDF-1.4\n%ABCD\n\n")
 
-	writer.putFormXobjects(reader)
+	err = writer.putFormXobjects(reader)
+	if err != nil {
+		return errors.Wrap(err, "Unable to put form xobjects")
+	}
 
 	pagesObjId := writer.n + 1
 	pageObjId := writer.n + 2
@@ -506,4 +554,6 @@ func Demo() {
 	writer.out("startxref")
 	writer.out(fmt.Sprintf("%d", xrefPos))
 	writer.out("%%EOF")
+
+	return nil
 }
