@@ -14,21 +14,21 @@ import (
 
 type PdfReader struct {
 	availableBoxes []string
-	stack []string
-	trailer *PdfValue
-	catalog *PdfValue
-	pages []*PdfValue
-	xrefPos int
-	xref []map[int]int
-	f *os.File
+	stack          []string
+	trailer        *PdfValue
+	catalog        *PdfValue
+	pages          []*PdfValue
+	xrefPos        int
+	xref           []map[int]int
+	f              *os.File
 }
 
 func NewPdfReader(filename string) *PdfReader {
-    var err error
-    f, err := os.Open(filename)
-    if err != nil {
-        panic(err)
-    }
+	var err error
+	f, err := os.Open(filename)
+	if err != nil {
+		panic(err)
+	}
 
 	parser := &PdfReader{}
 	parser.init()

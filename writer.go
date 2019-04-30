@@ -9,14 +9,14 @@ import (
 )
 
 type PdfWriter struct {
-	f *os.File
-	k float64
-	tpls []*PdfTemplate
-	n int
+	f       *os.File
+	k       float64
+	tpls    []*PdfTemplate
+	n       int
 	offsets map[int]int
-	offset int
+	offset  int
 	// Keep track of which objects have already been written
-	obj_stack map[int]*PdfValue
+	obj_stack     map[int]*PdfValue
 	don_obj_stack map[int]*PdfValue
 }
 
@@ -29,11 +29,11 @@ func (this *PdfWriter) Init() {
 }
 
 func NewPdfWriter(filename string) *PdfWriter {
-    var err error
-    //f, err := os.Open(filename)
-    if err != nil {
-        panic(err)
-    }
+	var err error
+	//f, err := os.Open(filename)
+	if err != nil {
+		panic(err)
+	}
 
 	writer := &PdfWriter{}
 	writer.Init()
@@ -61,11 +61,11 @@ var k float64
 // Create a PdfTemplate object from a page number (e.g. 1) and a boxName (e.g. MediaBox)
 func (this *PdfWriter) importPage(reader *PdfReader, pageno int, boxName string) *PdfTemplate {
 	// TODO: Improve error handling
-/*
-	if !in_array(boxName, availableBoxes) {
-		panic("box '" + boxName + "' not in available boxes")
-	}
-*/
+	/*
+		if !in_array(boxName, availableBoxes) {
+			panic("box '" + boxName + "' not in available boxes")
+		}
+	*/
 
 	// Set default scale to 1
 	k = 1
@@ -431,9 +431,9 @@ func (this *PdfWriter) useTemplate(tpl *PdfTemplate, tplid int, _x float64, _y f
 	tData["scaleY"] = (_h / h)
 	tData["tx"] = _x
 	tData["ty"] = (3 - _y - _h)
-	tData["lty"] = (3 - _y - _h) - (3 - h) * (_h / h)
+	tData["lty"] = (3 - _y - _h) - (3-h)*(_h/h)
 
-	result += fmt.Sprintf("q %.4F 0 0 %.4F %.4F %.4F cm\n", tData["scaleX"], tData["scaleY"], tData["tx"] * k, tData["ty"] * k) // translate
+	result += fmt.Sprintf("q %.4F 0 0 %.4F %.4F %.4F cm\n", tData["scaleX"], tData["scaleY"], tData["tx"]*k, tData["ty"]*k) // translate
 	result += fmt.Sprintf("%s%d Do Q", "/TPL", 1)
 
 	result += "\nQ"
@@ -464,10 +464,10 @@ func Demo() {
 	writer.out("endobj")
 
 	writer.newObj(-1, false)
-	writer.out(fmt.Sprintf("<< /Type /Page /Parent %d 0 R /LastModified (D:20190412184239+00'00') /Resources %s /MediaBox [0.000000 0.000000 1319.976000 887.976000] /CropBox [0.000000 0.000000 1319.976000 887.976000] /BleedBox [20.988000 20.988000 1298.988000 866.988000] /TrimBox [29.988000 29.988000 1289.988000 857.988000] /Contents %d 0 R /Rotate 0 /Group << /Type /Group /S /Transparency /CS /DeviceRGB >> /PZ 1 >>", pagesObjId, fmt.Sprintf("<</ProcSet [/PDF /Text /ImageB /ImageC /ImageI ] /XObject <</TPL1 %d 0 R>>>>", 1), contentsObjId));
-	writer.out("endobj");
+	writer.out(fmt.Sprintf("<< /Type /Page /Parent %d 0 R /LastModified (D:20190412184239+00'00') /Resources %s /MediaBox [0.000000 0.000000 1319.976000 887.976000] /CropBox [0.000000 0.000000 1319.976000 887.976000] /BleedBox [20.988000 20.988000 1298.988000 866.988000] /TrimBox [29.988000 29.988000 1289.988000 857.988000] /Contents %d 0 R /Rotate 0 /Group << /Type /Group /S /Transparency /CS /DeviceRGB >> /PZ 1 >>", pagesObjId, fmt.Sprintf("<</ProcSet [/PDF /Text /ImageB /ImageC /ImageI ] /XObject <</TPL1 %d 0 R>>>>", 1), contentsObjId))
+	writer.out("endobj")
 
-	str := writer.useTemplate(tpl, 1, 0.0, -887.976 * 0.5, 1319.976 * 0.5, 0.0)
+	str := writer.useTemplate(tpl, 1, 0.0, -887.976*0.5, 1319.976*0.5, 0.0)
 
 	writer.newObj(-1, false)
 	writer.out(fmt.Sprintf("<</Length %d>>\nstream", len(str)))
@@ -479,7 +479,7 @@ func Demo() {
 
 	// put catalog
 	writer.newObj(-1, false)
-	writer.out(fmt.Sprintf("<< /Type /Catalog /Pages %d 0 R >>", pagesObjId));
+	writer.out(fmt.Sprintf("<< /Type /Catalog /Pages %d 0 R >>", pagesObjId))
 
 	// get xref position
 	xrefPos := writer.offset
