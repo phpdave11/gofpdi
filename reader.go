@@ -5,12 +5,12 @@ import (
 	"bytes"
 	"compress/zlib"
 	"fmt"
+	"github.com/pkg/errors"
 	"io"
 	"math"
 	"os"
 	"strconv"
 	"strings"
-	"github.com/pkg/errors"
 )
 
 type PdfReader struct {
@@ -248,7 +248,7 @@ func (this *PdfReader) readValue(r *bufio.Reader, t string) (*PdfValue, error) {
 
 			value, err := this.readValue(r, newKey)
 			if err != nil {
-				return nil, errors.Wrap(err, "Failed to read value for token: " + newKey)
+				return nil, errors.Wrap(err, "Failed to read value for token: "+newKey)
 			}
 
 			if value.Type == -1 {
@@ -290,7 +290,7 @@ func (this *PdfReader) readValue(r *bufio.Reader, t string) (*PdfValue, error) {
 
 			value, err := this.readValue(r, key)
 			if err != nil {
-				return nil, errors.Wrap(err, "Failed to read value for token: " + key)
+				return nil, errors.Wrap(err, "Failed to read value for token: "+key)
 			}
 
 			if value.Type == -1 {
@@ -433,7 +433,7 @@ func (this *PdfReader) resolveObject(objSpec *PdfValue) (*PdfValue, error) {
 
 		obj, err := this.readValue(r, token)
 		if err != nil {
-			return nil, errors.Wrap(err, "Failed to read value for token: " + token)
+			return nil, errors.Wrap(err, "Failed to read value for token: "+token)
 		}
 
 		if obj.Type != PDF_TYPE_OBJDEC {
@@ -457,7 +457,7 @@ func (this *PdfReader) resolveObject(objSpec *PdfValue) (*PdfValue, error) {
 		// Read actual object value
 		value, err := this.readValue(r, token)
 		if err != nil {
-			return nil, errors.Wrap(err, "Failed to read value for token: " + token)
+			return nil, errors.Wrap(err, "Failed to read value for token: "+token)
 		}
 
 		// Read next token
@@ -567,7 +567,7 @@ func (this *PdfReader) findXref() error {
 			// Convert line (string) into int
 			result, err = strconv.Atoi(line)
 			if err != nil {
-				return errors.Wrap(err, "Failed to convert xref position into integer: " + line)
+				return errors.Wrap(err, "Failed to convert xref position into integer: "+line)
 			}
 			break
 		} else if line == "startxref" {
@@ -626,7 +626,7 @@ func (this *PdfReader) readXref() error {
 	}
 	maxObject, err := strconv.Atoi(t)
 	if err != nil {
-		return errors.Wrap(err, "Failed to convert max object to integer: " + t)
+		return errors.Wrap(err, "Failed to convert max object to integer: "+t)
 	}
 
 	// Create a slice of map[int]int with capacity of maxObject
@@ -642,7 +642,7 @@ func (this *PdfReader) readXref() error {
 		// Get object position as int
 		objPos, err := strconv.Atoi(t)
 		if err != nil {
-			return errors.Wrap(err, "Failed to convert object position to integer: " + t)
+			return errors.Wrap(err, "Failed to convert object position to integer: "+t)
 		}
 
 		t, err = this.readToken(r)
@@ -653,7 +653,7 @@ func (this *PdfReader) readXref() error {
 		// Get object generation as int
 		objGen, err := strconv.Atoi(t)
 		if err != nil {
-			return errors.Wrap(err, "Failed to convert object generation to integer: " + t)
+			return errors.Wrap(err, "Failed to convert object generation to integer: "+t)
 		}
 
 		// Get object status (free or new)
@@ -689,7 +689,7 @@ func (this *PdfReader) readXref() error {
 	// Read trailer dictionary
 	this.trailer, err = this.readValue(r, t)
 	if err != nil {
-		return errors.Wrap(err, "Failed to read value for token: " + t)
+		return errors.Wrap(err, "Failed to read value for token: "+t)
 	}
 
 	// set xref table
@@ -864,7 +864,7 @@ func (this *PdfReader) getContent(pageno int) (string, error) {
 		if err != nil {
 			return "", errors.Wrap(err, "Failed to get page content")
 		}
-		
+
 		for i := 0; i < len(contents); i++ {
 			// Decode content if one or more /Filter is specified.
 			// Most common filter is FlateDecode which can be uncompressed with zlib

@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"compress/zlib"
 	"fmt"
+	"github.com/pkg/errors"
 	"math"
 	"os"
-	"github.com/pkg/errors"
 )
 
 type PdfWriter struct {
@@ -33,7 +33,7 @@ func NewPdfWriter(filename string) (*PdfWriter, error) {
 	var err error
 	//f, err := os.Open(filename)
 	if err != nil {
-		return nil, errors.Wrap(err, "Unable to open filename: " + filename)
+		return nil, errors.Wrap(err, "Unable to open filename: "+filename)
 	}
 
 	writer := &PdfWriter{}
@@ -479,7 +479,7 @@ func Demo() error {
 	var err error
 
 	// Create new reader
-	reader, err := NewPdfReader("/Users/dave/Desktop/PDFPL110.pdf")
+	reader, err := NewPdfReader("/Users/dave/Desktop/PDFPL1101.pdf")
 	if err != nil {
 		return errors.Wrap(err, "Unable to create new pdf reader")
 	}
