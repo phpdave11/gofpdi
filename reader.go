@@ -750,18 +750,8 @@ func (this *PdfReader) readPages() error {
 func (this *PdfReader) getPageResources(pageno int) (*PdfValue, error) {
 	var err error
 
-	// TODO:  Add multi page support
-	if pageno != 1 {
-		return nil, errors.New("TODO:  Add multi page support")
-	}
-
-	// TODO:  Add multi page support
-	if len(this.pages) != 1 {
-		return nil, errors.New("TODO:  Add multi page support")
-	}
-
 	// Resolve page object
-	page, err := this.resolveObject(this.pages[0])
+	page, err := this.resolveObject(this.pages[pageno-1])
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to resolve page object")
 	}
@@ -841,18 +831,8 @@ func (this *PdfReader) getContent(pageno int) (string, error) {
 	var err error
 	var contents []*PdfValue
 
-	// TODO:  Add multi page support
-	if pageno != 1 {
-		return "", errors.New("TODO:  Add multi page support")
-	}
-
-	// TODO:  Add multi page support
-	if len(this.pages) != 1 {
-		return "", errors.New("TODO:  Add multi page support")
-	}
-
-	// TODO:  Add multi page support
-	page := this.pages[0]
+	// Get page
+	page := this.pages[pageno-1]
 
 	// FIXME: This could be slow, converting []byte to string and appending many times
 	buffer := ""
@@ -945,7 +925,7 @@ func (this *PdfReader) getPageBoxes(pageno int, k float64) (map[string]map[strin
 	result := make(map[string]map[string]float64, len(this.availableBoxes))
 
 	// Resolve page object
-	page, err := this.resolveObject(this.pages[0])
+	page, err := this.resolveObject(this.pages[pageno-1])
 	if err != nil {
 		return nil, errors.New("Failed to resolve page object")
 	}
@@ -1013,16 +993,6 @@ func (this *PdfReader) getPageBox(page *PdfValue, box_index string, k float64) (
 
 // Get page rotation for a page number
 func (this *PdfReader) getPageRotation(pageno int) (*PdfValue, error) {
-	// TODO:  Add multi page support
-	if pageno != 1 {
-		return nil, errors.New("TODO:  Multi-page support")
-	}
-
-	// TODO:  Add multi page support
-	if len(this.pages) != 1 {
-		return nil, errors.New("TODO:  Multi-page support")
-	}
-
 	return this._getPageRotation(this.pages[pageno-1])
 }
 

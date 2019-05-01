@@ -58,6 +58,7 @@ func NewPdfWriter(filename string) (*PdfWriter, error) {
 
 // Done with parsing.  Now, create templates.
 type PdfTemplate struct {
+	Id        int
 	Reader    *PdfReader
 	Resources *PdfValue
 	Buffer    string
@@ -162,7 +163,7 @@ func (this *PdfWriter) ImportPage(reader *PdfReader, pageno int, boxName string)
 		tpl.Rotation = angle * -1
 	}
 
-	this.tpls[0] = tpl
+	this.tpls = append(this.tpls, tpl)
 
 	return tpl, nil
 }
@@ -300,8 +301,9 @@ func (this *PdfWriter) writeValue(value *PdfValue) {
 }
 
 // Output Form XObjects (1 for each template)
-func (this *PdfWriter) PutFormXobjects(reader *PdfReader) error {
+func (this *PdfWriter) PutFormXobjects(reader *PdfReader) (map[string]int, error) {
 	var err error
+	var result = make(map[string]int, 0)
 
 	compress := true
 	filter := ""
@@ -312,7 +314,8 @@ func (this *PdfWriter) PutFormXobjects(reader *PdfReader) error {
 	for i := 0; i < len(this.tpls); i++ {
 		tpl := this.tpls[i]
 		if tpl == nil {
-			return errors.New("Template is nil")
+			continue
+			return nil, errors.New("Template is nil")
 		}
 		var p string
 		if compress {
@@ -332,6 +335,8 @@ func (this *PdfWriter) PutFormXobjects(reader *PdfReader) error {
 		cN := this.n // remember current "n"
 
 		tpl.N = this.n
+
+		result[fmt.Sprintf("/GOFPDITPL%d", i)] = cN
 
 		this.out("<<" + filter + "/Type /XObject")
 		this.out("/Subtype /Form")
@@ -386,7 +391,7 @@ func (this *PdfWriter) PutFormXobjects(reader *PdfReader) error {
 		if tpl.Resources != nil {
 			this.writeValue(tpl.Resources) // "n" will be changed
 		} else {
-			return errors.New("Template resources are empty")
+			return nil, errors.New("Template resources are empty")
 		}
 
 		nN := this.n // remember new "n"
@@ -408,11 +413,11 @@ func (this *PdfWriter) PutFormXobjects(reader *PdfReader) error {
 		// then from dependencies of those resources).
 		err = this.putImportedObjects(reader)
 		if err != nil {
-			return errors.Wrap(err, "Failed to put imported objects")
+			return nil, errors.Wrap(err, "Failed to put imported objects")
 		}
 	}
 
-	return nil
+	return result, nil
 }
 
 func (this *PdfWriter) putImportedObjects(reader *PdfReader) error {
@@ -468,7 +473,7 @@ func (this *PdfWriter) putImportedObjects(reader *PdfReader) error {
 func (this *PdfWriter) getTemplateSize(tplid int, _w float64, _h float64) map[string]float64 {
 	result := make(map[string]float64, 2)
 
-	tpl := this.tpls[0]
+	tpl := this.tpls[tplid]
 
 	w := tpl.W
 	h := tpl.H
@@ -552,7 +557,7 @@ func Demo() (*PdfWriter, error) {
 
 	writer.out("%PDF-1.4\n%ABCD\n\n")
 
-	err = writer.PutFormXobjects(reader)
+	_, err = writer.PutFormXobjects(reader)
 	if err != nil {
 		return nil, errors.Wrap(err, "Unable to put form xobjects")
 	}
