@@ -1,6 +1,7 @@
 package gofpdi
 
 import (
+	"bufio"
 	"bytes"
 	"compress/zlib"
 	"fmt"
@@ -11,34 +12,41 @@ import (
 
 type PdfWriter struct {
 	f       *os.File
+	w       *bufio.Writer
 	k       float64
 	tpls    []*PdfTemplate
 	n       int
 	offsets map[int]int
 	offset  int
 	// Keep track of which objects have already been written
-	obj_stack     map[int]*PdfValue
-	don_obj_stack map[int]*PdfValue
+	obj_stack      map[int]*PdfValue
+	don_obj_stack  map[int]*PdfValue
+	written_objs   map[int]string
+	current_obj    string
+	current_obj_id int
 }
 
 func (this *PdfWriter) Init() {
+	this.n = 3
 	this.k = 1
 	this.offsets = make(map[int]int, 0)
 	this.obj_stack = make(map[int]*PdfValue, 0)
 	this.don_obj_stack = make(map[int]*PdfValue, 0)
 	this.tpls = make([]*PdfTemplate, 1)
+	this.written_objs = make(map[int]string, 0)
 }
 
 func NewPdfWriter(filename string) (*PdfWriter, error) {
 	var err error
-	//f, err := os.Open(filename)
+	f, err := os.Create(filename)
 	if err != nil {
-		return nil, errors.Wrap(err, "Unable to open filename: "+filename)
+		return nil, errors.Wrap(err, "Unable to create filename: "+filename)
 	}
 
 	writer := &PdfWriter{}
 	writer.Init()
-	//writer.f = f
+	writer.f = f
+	writer.w = bufio.NewWriter(f)
 	return writer, nil
 }
 
@@ -59,8 +67,12 @@ type PdfTemplate struct {
 
 var k float64
 
+func (this *PdfWriter) GetImportedObjects() map[int]string {
+	return this.written_objs
+}
+
 // Create a PdfTemplate object from a page number (e.g. 1) and a boxName (e.g. MediaBox)
-func (this *PdfWriter) importPage(reader *PdfReader, pageno int, boxName string) (*PdfTemplate, error) {
+func (this *PdfWriter) ImportPage(reader *PdfReader, pageno int, boxName string) (*PdfTemplate, error) {
 	var err error
 
 	// TODO: Improve error handling
@@ -158,23 +170,40 @@ func (this *PdfWriter) newObj(objId int, onlyNewObj bool) {
 
 	if !onlyNewObj {
 		this.offsets[objId] = this.offset
+
 		this.out(fmt.Sprintf("%d 0 obj", objId))
+
+		this.current_obj = ""
+		this.current_obj_id = objId
 	}
+}
+
+func (this *PdfWriter) endObj() {
+	this.out("endobj")
+
+	this.written_objs[this.current_obj_id] = this.current_obj
+	this.current_obj_id = -1
 }
 
 // Output PDF data with a newline
 func (this *PdfWriter) out(s string) {
 	this.offset += len(s)
-	fmt.Print(s)
+	this.w.WriteString(s)
 
 	this.offset++
-	fmt.Print("\n")
+	this.w.WriteString("\n")
+
+	if this.current_obj_id > -1 {
+		this.current_obj += s + "\n"
+	}
 }
 
 // Output PDF data
 func (this *PdfWriter) straightOut(s string) {
 	this.offset += len(s)
-	fmt.Print(s)
+	this.w.WriteString(s)
+
+	this.current_obj += s
 }
 
 // Output a PdfValue
@@ -256,7 +285,7 @@ func (this *PdfWriter) writeValue(value *PdfValue) {
 }
 
 // Output Form XObjects (1 for each template)
-func (this *PdfWriter) putFormXobjects(reader *PdfReader) error {
+func (this *PdfWriter) PutFormXobjects(reader *PdfReader) error {
 	var err error
 
 	compress := true
@@ -352,7 +381,11 @@ func (this *PdfWriter) putFormXobjects(reader *PdfReader) error {
 		this.out(p)
 		this.out("endstream")
 
+		this.endObj()
+
 		this.n = nN // reset to new "n"
+
+		//fmt.Println("now imported")
 
 		// Put imported objects, starting with the ones from the XObject's Resources,
 		// then from dependencies of those resources).
@@ -373,7 +406,12 @@ func (this *PdfWriter) putImportedObjects(reader *PdfReader) error {
 	// TODO make the order of this the same every time
 	for {
 		atLeastOne := false
-		for k, v := range this.obj_stack {
+
+		// FIXME:  How to determine number of objects before this loop?
+		for i := 0; i < 9999; i++ {
+			k := i
+			v := this.obj_stack[i]
+
 			if v == nil {
 				continue
 			}
@@ -394,7 +432,7 @@ func (this *PdfWriter) putImportedObjects(reader *PdfReader) error {
 				this.writeValue(nObj.Value)
 			}
 
-			this.out("endobj")
+			this.endObj()
 
 			// Remove from stack
 			this.obj_stack[k] = nil
@@ -475,31 +513,31 @@ func (this *PdfWriter) useTemplate(tpl *PdfTemplate, tplid int, _x float64, _y f
 	return result
 }
 
-func Demo() error {
+func Demo() (*PdfWriter, error) {
 	var err error
 
 	// Create new reader
-	reader, err := NewPdfReader("/Users/dave/Desktop/PDFPL1101.pdf")
+	reader, err := NewPdfReader("/Users/dave/Desktop/PDFPL110.pdf")
 	if err != nil {
-		return errors.Wrap(err, "Unable to create new pdf reader")
+		return nil, errors.Wrap(err, "Unable to create new pdf reader")
 	}
 
 	// Create new writer
 	writer, err := NewPdfWriter("/Users/dave/Desktop/pdfwriter-output.pdf")
 	if err != nil {
-		return errors.Wrap(err, "Unable to create new pdf writer")
+		return nil, errors.Wrap(err, "Unable to create new pdf writer")
 	}
 
-	tpl, err := writer.importPage(reader, 1, "/CropBox")
+	tpl, err := writer.ImportPage(reader, 1, "/CropBox")
 	if err != nil {
-		return errors.Wrap(err, "Unable to import page")
+		return nil, errors.Wrap(err, "Unable to import page")
 	}
 
 	writer.out("%PDF-1.4\n%ABCD\n\n")
 
-	err = writer.putFormXobjects(reader)
+	err = writer.PutFormXobjects(reader)
 	if err != nil {
-		return errors.Wrap(err, "Unable to put form xobjects")
+		return nil, errors.Wrap(err, "Unable to put form xobjects")
 	}
 
 	pagesObjId := writer.n + 1
@@ -555,5 +593,7 @@ func Demo() error {
 	writer.out(fmt.Sprintf("%d", xrefPos))
 	writer.out("%%EOF")
 
-	return nil
+	writer.w.Flush()
+
+	return writer, nil
 }
