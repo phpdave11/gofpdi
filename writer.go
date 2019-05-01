@@ -41,16 +41,18 @@ func (this *PdfWriter) SetNextObjectID(id int) {
 }
 
 func NewPdfWriter(filename string) (*PdfWriter, error) {
-	var err error
-	f, err := os.Create(filename)
-	if err != nil {
-		return nil, errors.Wrap(err, "Unable to create filename: "+filename)
-	}
-
 	writer := &PdfWriter{}
 	writer.Init()
-	writer.f = f
-	writer.w = bufio.NewWriter(f)
+
+	if filename != "" {
+		var err error
+		f, err := os.Create(filename)
+		if err != nil {
+			return nil, errors.Wrap(err, "Unable to create filename: "+filename)
+		}
+		writer.f = f
+		writer.w = bufio.NewWriter(f)
+	}
 	return writer, nil
 }
 
@@ -192,10 +194,16 @@ func (this *PdfWriter) endObj() {
 // Output PDF data with a newline
 func (this *PdfWriter) out(s string) {
 	this.offset += len(s)
-	this.w.WriteString(s)
+
+	if this.w != nil {
+		this.w.WriteString(s)
+	}
 
 	this.offset++
-	this.w.WriteString("\n")
+
+	if this.w != nil {
+		this.w.WriteString("\n")
+	}
 
 	if this.current_obj_id > -1 {
 		this.current_obj += s + "\n"
@@ -205,7 +213,10 @@ func (this *PdfWriter) out(s string) {
 // Output PDF data
 func (this *PdfWriter) straightOut(s string) {
 	this.offset += len(s)
-	this.w.WriteString(s)
+
+	if this.w != nil {
+		this.w.WriteString(s)
+	}
 
 	this.current_obj += s
 }
@@ -300,7 +311,9 @@ func (this *PdfWriter) PutFormXobjects(reader *PdfReader) error {
 
 	for i := 0; i < len(this.tpls); i++ {
 		tpl := this.tpls[i]
-
+		if tpl == nil {
+			return errors.New("Template is nil")
+		}
 		var p string
 		if compress {
 			var b bytes.Buffer
