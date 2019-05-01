@@ -27,13 +27,17 @@ type PdfWriter struct {
 }
 
 func (this *PdfWriter) Init() {
-	this.n = 3
+	//this.n = 3
 	this.k = 1
 	this.offsets = make(map[int]int, 0)
 	this.obj_stack = make(map[int]*PdfValue, 0)
 	this.don_obj_stack = make(map[int]*PdfValue, 0)
 	this.tpls = make([]*PdfTemplate, 1)
 	this.written_objs = make(map[int]string, 0)
+}
+
+func (this *PdfWriter) SetNextObjectID(id int) {
+	this.n = id - 1
 }
 
 func NewPdfWriter(filename string) (*PdfWriter, error) {
