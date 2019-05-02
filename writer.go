@@ -32,7 +32,7 @@ func (this *PdfWriter) Init() {
 	this.offsets = make(map[int]int, 0)
 	this.obj_stack = make(map[int]*PdfValue, 0)
 	this.don_obj_stack = make(map[int]*PdfValue, 0)
-	this.tpls = make([]*PdfTemplate, 1)
+	this.tpls = make([]*PdfTemplate, 0)
 	this.written_objs = make(map[int]string, 0)
 }
 
@@ -476,6 +476,9 @@ func (this *PdfWriter) getTemplateSize(tplid int, _w float64, _h float64) map[st
 
 	tpl := this.tpls[tplid]
 
+	tpl.W /= 72
+	tpl.H /= 72
+
 	w := tpl.W
 	h := tpl.H
 
@@ -496,6 +499,40 @@ func (this *PdfWriter) getTemplateSize(tplid int, _w float64, _h float64) map[st
 	result["h"] = _h
 
 	return result
+}
+
+func (this *PdfWriter) UseTemplate(tplName string, _x float64, _y float64, _w float64, _h float64) (string, float64, float64, float64, float64) {
+	if tplName != "" {
+	}
+
+	tpl := this.tpls[0]
+
+	w := tpl.W / 72
+	h := tpl.H / 72
+
+	// why does X need this, but not Y??
+	_x *= 72
+
+	_x += tpl.X
+	_y += tpl.Y
+
+	wh := this.getTemplateSize(0, _w, _h)
+
+	_w = wh["w"]
+	_h = wh["h"]
+
+	tData := make(map[string]float64, 9)
+	tData["x"] = 0.0
+	tData["y"] = 0.0
+	tData["w"] = _w
+	tData["h"] = _h
+	tData["scaleX"] = (_w / w)
+	tData["scaleY"] = (_h / h)
+	tData["tx"] = _x
+	tData["ty"] = (0 - _y - _h)
+	tData["lty"] = (0 - _y - _h) - (0-h)*(_h/h)
+
+	return "/GOFPDITPL0", tData["scaleX"], tData["scaleY"], tData["tx"]*k, tData["ty"]*k
 }
 
 // Generate PDF drawing code to draw a Template (Form XObject) onto a page
