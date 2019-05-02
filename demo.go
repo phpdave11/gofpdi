@@ -1,8 +1,8 @@
 package gofpdi
 
 import (
-	"github.com/pkg/errors"
 	"fmt"
+	"github.com/pkg/errors"
 )
 
 func Demo() (*PdfWriter, error) {

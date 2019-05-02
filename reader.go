@@ -437,7 +437,7 @@ func (this *PdfReader) resolveObject(objSpec *PdfValue) (*PdfValue, error) {
 		}
 
 		if obj.Type != PDF_TYPE_OBJDEC {
-			return nil, errors.New("Expected type to be PDF_TYPE_OBJDEC, got: " + string(obj.Type))
+			return nil, errors.New(fmt.Sprintf("Expected type to be PDF_TYPE_OBJDEC, got: %d", obj.Type))
 		}
 
 		if obj.Id != objSpec.Id {
