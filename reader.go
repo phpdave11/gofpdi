@@ -750,6 +750,11 @@ func (this *PdfReader) readPages() error {
 func (this *PdfReader) getPageResources(pageno int) (*PdfValue, error) {
 	var err error
 
+	// Check to make sure page exists in pages slice
+	if len(this.pages) < pageno {
+		return nil, errors.New(fmt.Sprintf("Page %d does not exist!", pageno))
+	}
+
 	// Resolve page object
 	page, err := this.resolveObject(this.pages[pageno-1])
 	if err != nil {
@@ -830,6 +835,11 @@ func (this *PdfReader) getPageContent(objSpec *PdfValue) ([]*PdfValue, error) {
 func (this *PdfReader) getContent(pageno int) (string, error) {
 	var err error
 	var contents []*PdfValue
+
+	// Check to make sure page exists in pages slice
+	if len(this.pages) < pageno {
+		return "", errors.New(fmt.Sprintf("Page %d does not exist!", pageno))
+	}
 
 	// Get page
 	page := this.pages[pageno-1]
@@ -924,6 +934,11 @@ func (this *PdfReader) getPageBoxes(pageno int, k float64) (map[string]map[strin
 	// Allocate result with the number of available boxes
 	result := make(map[string]map[string]float64, len(this.availableBoxes))
 
+	// Check to make sure page exists in pages slice
+	if len(this.pages) < pageno {
+		return nil, errors.New(fmt.Sprintf("Page %d does not exist!", pageno))
+	}
+
 	// Resolve page object
 	page, err := this.resolveObject(this.pages[pageno-1])
 	if err != nil {
@@ -993,6 +1008,11 @@ func (this *PdfReader) getPageBox(page *PdfValue, box_index string, k float64) (
 
 // Get page rotation for a page number
 func (this *PdfReader) getPageRotation(pageno int) (*PdfValue, error) {
+	// Check to make sure page exists in pages slice
+	if len(this.pages) < pageno {
+		return nil, errors.New(fmt.Sprintf("Page %d does not exist!", pageno))
+	}
+
 	return this._getPageRotation(this.pages[pageno-1])
 }
 
