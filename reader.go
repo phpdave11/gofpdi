@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"compress/zlib"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/pkg/errors"
 	"io"
 	"math"
@@ -34,7 +35,10 @@ func NewPdfReader(filename string) (*PdfReader, error) {
 	parser := &PdfReader{}
 	parser.init()
 	parser.f = f
-	parser.read()
+	err = parser.read()
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to read pdf")
+	}
 
 	return parser, nil
 }
@@ -752,7 +756,7 @@ func (this *PdfReader) getPageResources(pageno int) (*PdfValue, error) {
 
 	// Check to make sure page exists in pages slice
 	if len(this.pages) < pageno {
-		return nil, errors.New(fmt.Sprintf("Page %d does not exist!", pageno))
+		return nil, errors.New(fmt.Sprintf("Page %d does not exist!!", pageno))
 	}
 
 	// Resolve page object
@@ -838,7 +842,7 @@ func (this *PdfReader) getContent(pageno int) (string, error) {
 
 	// Check to make sure page exists in pages slice
 	if len(this.pages) < pageno {
-		return "", errors.New(fmt.Sprintf("Page %d does not exist!", pageno))
+		return "", errors.New(fmt.Sprintf("Page %d does not exist.", pageno))
 	}
 
 	// Get page
@@ -936,7 +940,11 @@ func (this *PdfReader) getPageBoxes(pageno int, k float64) (map[string]map[strin
 
 	// Check to make sure page exists in pages slice
 	if len(this.pages) < pageno {
-		return nil, errors.New(fmt.Sprintf("Page %d does not exist!", pageno))
+		spew.Dump(this.xref)
+		spew.Dump(this.xrefPos)
+		spew.Dump(this.catalog)
+		spew.Dump(this.pages)
+		return nil, errors.New(fmt.Sprintf("Page %d does not exist?", pageno))
 	}
 
 	// Resolve page object
@@ -1010,7 +1018,7 @@ func (this *PdfReader) getPageBox(page *PdfValue, box_index string, k float64) (
 func (this *PdfReader) getPageRotation(pageno int) (*PdfValue, error) {
 	// Check to make sure page exists in pages slice
 	if len(this.pages) < pageno {
-		return nil, errors.New(fmt.Sprintf("Page %d does not exist!", pageno))
+		return nil, errors.New(fmt.Sprintf("Page %d does not exist!!!!", pageno))
 	}
 
 	return this._getPageRotation(this.pages[pageno-1])
@@ -1066,13 +1074,13 @@ func (this *PdfReader) _getPageRotation(page *PdfValue) (*PdfValue, error) {
 
 func (this *PdfReader) read() error {
 	var err error
-
+	fmt.Println("Reading PDF!")
 	// Find xref position
 	err = this.findXref()
 	if err != nil {
 		return errors.Wrap(err, "Failed to find xref position")
 	}
-
+	fmt.Printf("XREF POS: %d\n", this.xrefPos)
 	// Parse xref table
 	err = this.readXref()
 	if err != nil {

@@ -24,6 +24,11 @@ type PdfWriter struct {
 	written_objs   map[int]string
 	current_obj    string
 	current_obj_id int
+	tpl_id_offset  int
+}
+
+func (this *PdfWriter) SetTplIdOffset(n int) {
+	this.tpl_id_offset = n
 }
 
 func (this *PdfWriter) Init() {
@@ -78,8 +83,12 @@ func (this *PdfWriter) GetImportedObjects() map[int]string {
 	return this.written_objs
 }
 
+func (this *PdfWriter) ClearImportedObjects() {
+	this.written_objs = make(map[int]string, 0)
+}
+
 // Create a PdfTemplate object from a page number (e.g. 1) and a boxName (e.g. MediaBox)
-func (this *PdfWriter) ImportPage(reader *PdfReader, pageno int, boxName string) (*PdfTemplate, error) {
+func (this *PdfWriter) ImportPage(reader *PdfReader, pageno int, boxName string) (int, error) {
 	var err error
 
 	// TODO: Improve error handling
@@ -95,7 +104,7 @@ func (this *PdfWriter) ImportPage(reader *PdfReader, pageno int, boxName string)
 	// Get all page boxes
 	pageBoxes, err := reader.getPageBoxes(1, k)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get page boxes")
+		return -1, errors.Wrap(err, "Failed to get page boxes")
 	}
 
 	// If requested box name does not exist for this page, use an alternate box
@@ -110,17 +119,17 @@ func (this *PdfWriter) ImportPage(reader *PdfReader, pageno int, boxName string)
 	// If the requested box name or an alternate box name cannot be found, trigger an error
 	// TODO: Improve error handling
 	if _, ok := pageBoxes[boxName]; !ok {
-		return nil, errors.New("Box not found: " + boxName)
+		return -1, errors.New("Box not found: " + boxName)
 	}
 
 	pageResources, err := reader.getPageResources(pageno)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get page resources")
+		return -1, errors.Wrap(err, "Failed to get page resources")
 	}
 
 	content, err := reader.getContent(pageno)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get content")
+		return -1, errors.Wrap(err, "Failed to get content")
 	}
 
 	// Set template values
@@ -138,7 +147,7 @@ func (this *PdfWriter) ImportPage(reader *PdfReader, pageno int, boxName string)
 	// Set template rotation
 	rotation, err := reader.getPageRotation(pageno)
 	if err != nil {
-		return nil, errors.Wrap(err, "Failed to get page rotation")
+		return -1, errors.Wrap(err, "Failed to get page rotation")
 	}
 	angle := rotation.Int % 360
 
@@ -165,7 +174,8 @@ func (this *PdfWriter) ImportPage(reader *PdfReader, pageno int, boxName string)
 
 	this.tpls = append(this.tpls, tpl)
 
-	return tpl, nil
+	// Return last template id
+	return len(this.tpls) - 1, nil
 }
 
 // Create a new object and keep track of the offset for the xref table
@@ -314,7 +324,6 @@ func (this *PdfWriter) PutFormXobjects(reader *PdfReader) (map[string]int, error
 	for i := 0; i < len(this.tpls); i++ {
 		tpl := this.tpls[i]
 		if tpl == nil {
-			continue
 			return nil, errors.New("Template is nil")
 		}
 		var p string
@@ -337,7 +346,7 @@ func (this *PdfWriter) PutFormXobjects(reader *PdfReader) (map[string]int, error
 		tpl.N = this.n
 
 		// Return xobject form name and object position
-		result[fmt.Sprintf("/GOFPDITPL%d", i)] = cN
+		result[fmt.Sprintf("/GOFPDITPL%d", i+this.tpl_id_offset)] = cN
 
 		this.out("<<" + filter + "/Type /XObject")
 		this.out("/Subtype /Form")
@@ -407,8 +416,6 @@ func (this *PdfWriter) PutFormXobjects(reader *PdfReader) (map[string]int, error
 		this.endObj()
 
 		this.n = nN // reset to new "n"
-
-		//fmt.Println("now imported")
 
 		// Put imported objects, starting with the ones from the XObject's Resources,
 		// then from dependencies of those resources).
@@ -501,17 +508,14 @@ func (this *PdfWriter) getTemplateSize(tplid int, _w float64, _h float64) map[st
 	return result
 }
 
-func (this *PdfWriter) UseTemplate(tplName string, _x float64, _y float64, _w float64, _h float64) (string, float64, float64, float64, float64) {
-	if tplName != "" {
-	}
+func (this *PdfWriter) UseTemplate(tplid int, _x float64, _y float64, _w float64, _h float64) (string, float64, float64, float64, float64) {
+	tpl := this.tpls[tplid]
 
-	tpl := this.tpls[0]
-
-	w := tpl.W / 72
-	h := tpl.H / 72
+	w := tpl.W // / 72
+	h := tpl.H // / 72
 
 	// why does X need this, but not Y??
-	_x *= 72
+	//_x *= 72
 
 	_x += tpl.X
 	_y += tpl.Y
@@ -532,16 +536,16 @@ func (this *PdfWriter) UseTemplate(tplName string, _x float64, _y float64, _w fl
 	tData["ty"] = (0 - _y - _h)
 	tData["lty"] = (0 - _y - _h) - (0-h)*(_h/h)
 
-	return "/GOFPDITPL0", tData["scaleX"], tData["scaleY"], tData["tx"]*k, tData["ty"]*k
+	return fmt.Sprintf("/GOFPDITPL%d", tplid+this.tpl_id_offset), tData["scaleX"], tData["scaleY"], tData["tx"] * k, tData["ty"] * k
 }
 
 // Generate PDF drawing code to draw a Template (Form XObject) onto a page
-func (this *PdfWriter) useTemplate(tpl *PdfTemplate, tplid int, _x float64, _y float64, _w float64, _h float64) string {
+func (this *PdfWriter) useTemplate(tplid int, _x float64, _y float64, _w float64, _h float64) string {
 	result := ""
 
 	result += "q 0 J 1 w 0 j 0 G 0 g\n" // reset standard values
 
-	//tpl := this.tpls[0]
+	tpl := this.tpls[tplid]
 
 	w := tpl.W
 	h := tpl.H
