@@ -43,13 +43,27 @@ func GeneratePDF() error {
 	)
 
 	// Import page from PDF
-	tpl := pdf.ImportPage("/Users/dave/Desktop/PDFPL110.pdf", 1, "/CropBox")
+	tpl1 := pdf.ImportPage("/Users/dave/Desktop/PDFPL108.pdf", 1, "/TrimBox")
+
+	// Import page from PDF
+	tpl2 := pdf.ImportPage("/Users/dave/Desktop/PDFPL110.pdf", 1, "/TrimBox")
+
+	// Import page from PDF
+	tpl3 := pdf.ImportPage("/Users/dave/Desktop/PDFPL115.pdf", 1, "/TrimBox")
+
+	// Import page from PDF - same PDF file, different pages
+	tpl4 := pdf.ImportPage("/Users/dave/Desktop/PDF280.pdf", 1, "/TrimBox")
+	tpl5 := pdf.ImportPage("/Users/dave/Desktop/PDF280.pdf", 2, "/TrimBox")
 
 	// Add Page
 	pdf.AddPage()
 
-	// Use Imported template
-	pdf.UseImportedTemplate(tpl, 0.5, 5.5, 7.5, 0)
+	// Use Imported templates
+	pdf.UseImportedTemplate(tpl1, 0.5, 5.5, 0, 1.5)
+	pdf.UseImportedTemplate(tpl2, 3.5, 5.5, 0, 1.5)
+	pdf.UseImportedTemplate(tpl3, 0.5, 8.5, 0, 1.5)
+	pdf.UseImportedTemplate(tpl4, 3.5, 8.5, 0, 1.5)
+	pdf.UseImportedTemplate(tpl5, 5.0, 8.5, 0, 1.5)
 
 	// Set font
 	err = SetDefaultFont(pdf)
