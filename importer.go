@@ -1,9 +1,5 @@
 package gofpdi
 
-import (
-	"fmt"
-)
-
 type Importer struct {
 	sourceFile string
 	readers    map[string]*PdfReader

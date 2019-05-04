@@ -87,8 +87,6 @@ func (this *PdfReader) skipComments(r *bufio.Reader) error {
 				}
 			}
 			break
-		} else {
-			//fmt.Printf("%s", string(b))
 		}
 	}
 
@@ -1074,13 +1072,11 @@ func (this *PdfReader) _getPageRotation(page *PdfValue) (*PdfValue, error) {
 
 func (this *PdfReader) read() error {
 	var err error
-	fmt.Println("Reading PDF!")
 	// Find xref position
 	err = this.findXref()
 	if err != nil {
 		return errors.Wrap(err, "Failed to find xref position")
 	}
-	fmt.Printf("XREF POS: %d\n", this.xrefPos)
 	// Parse xref table
 	err = this.readXref()
 	if err != nil {
