@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"compress/zlib"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
 	"github.com/pkg/errors"
 	"io"
 	"math"
@@ -938,10 +937,6 @@ func (this *PdfReader) getPageBoxes(pageno int, k float64) (map[string]map[strin
 
 	// Check to make sure page exists in pages slice
 	if len(this.pages) < pageno {
-		spew.Dump(this.xref)
-		spew.Dump(this.xrefPos)
-		spew.Dump(this.catalog)
-		spew.Dump(this.pages)
 		return nil, errors.New(fmt.Sprintf("Page %d does not exist?", pageno))
 	}
 
