@@ -100,12 +100,12 @@ func (this *Importer) SetNextObjectID(objId int) {
 	this.GetWriter().SetNextObjectID(objId)
 }
 
-func (this *Importer) PutFormXobjects() map[string]int {
+func (this *Importer) PutFormXobjects() map[string]string {
 	res, _ := this.GetWriter().PutFormXobjects(this.GetReader())
 	return res
 }
 
-func (this *Importer) GetImportedObjects() map[int]string {
+func (this *Importer) GetImportedObjects() map[string]string {
 	res := this.GetWriter().GetImportedObjects()
 	this.GetWriter().ClearImportedObjects()
 	return res
