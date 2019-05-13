@@ -105,10 +105,14 @@ func (this *Importer) PutFormXobjects() map[string]string {
 	return res
 }
 
-func (this *Importer) GetImportedObjects() map[string]string {
+func (this *Importer) GetImportedObjects() map[string][]byte {
 	res := this.GetWriter().GetImportedObjects()
 	this.GetWriter().ClearImportedObjects()
 	return res
+}
+
+func (this *Importer) GetImportedObjHashPos() map[string]map[int]string {
+	return this.GetWriter().GetImportedObjHashPos()
 }
 
 func (this *Importer) UseTemplate(tplid int, _x float64, _y float64, _w float64, _h float64) (string, float64, float64, float64, float64) {

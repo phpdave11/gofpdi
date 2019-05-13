@@ -4,12 +4,13 @@ import (
 	"bufio"
 	"bytes"
 	"compress/zlib"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"github.com/pkg/errors"
 	"math"
 	"os"
-    "crypto/sha1"
-	"encoding/hex"
+	//	"github.com/davecgh/go-spew/spew"
 )
 
 type PdfWriter struct {
@@ -21,12 +22,13 @@ type PdfWriter struct {
 	offsets map[int]int
 	offset  int
 	// Keep track of which objects have already been written
-	obj_stack      map[int]*PdfValue
-	don_obj_stack  map[int]*PdfValue
-	written_objs   map[string]string
-	current_obj    string
-	current_obj_id int
-	tpl_id_offset  int
+	obj_stack       map[int]*PdfValue
+	don_obj_stack   map[int]*PdfValue
+	written_objs    map[string][]byte
+	written_obj_pos map[string]map[int]string
+	current_obj     *bytes.Buffer
+	current_obj_id  int
+	tpl_id_offset   int
 }
 
 func (this *PdfWriter) SetTplIdOffset(n int) {
@@ -34,13 +36,13 @@ func (this *PdfWriter) SetTplIdOffset(n int) {
 }
 
 func (this *PdfWriter) Init() {
-	//this.n = 3
 	this.k = 1
-	this.offsets = make(map[int]int, 0)
 	this.obj_stack = make(map[int]*PdfValue, 0)
 	this.don_obj_stack = make(map[int]*PdfValue, 0)
 	this.tpls = make([]*PdfTemplate, 0)
-	this.written_objs = make(map[string]string, 0)
+	this.written_objs = make(map[string][]byte, 0)
+	this.written_obj_pos = make(map[string]map[int]string, 0)
+	this.current_obj = new(bytes.Buffer)
 }
 
 func (this *PdfWriter) SetNextObjectID(id int) {
@@ -81,12 +83,18 @@ type PdfTemplate struct {
 
 var k float64
 
-func (this *PdfWriter) GetImportedObjects() map[string]string {
+func (this *PdfWriter) GetImportedObjects() map[string][]byte {
 	return this.written_objs
 }
 
+// For each object (uniquely identified by a sha1 hash), return the positions
+// of each hash within the object, to be replaced with pdf object ids (integers)
+func (this *PdfWriter) GetImportedObjHashPos() map[string]map[int]string {
+	return this.written_obj_pos
+}
+
 func (this *PdfWriter) ClearImportedObjects() {
-	this.written_objs = make(map[string]string, 0)
+	this.written_objs = make(map[string][]byte, 0)
 }
 
 // Create a PdfTemplate object from a page number (e.g. 1) and a boxName (e.g. MediaBox)
@@ -188,80 +196,60 @@ func (this *PdfWriter) newObj(objId int, onlyNewObj bool) {
 	}
 
 	if !onlyNewObj {
-		this.offsets[objId] = this.offset
+		this.current_obj = new(bytes.Buffer)
+		this.current_obj_id = objId
 
-		//this.out(fmt.Sprintf("%d 0 obj", objId))
 		this.outObjDec(objId)
 
-		this.current_obj = ""
-		this.current_obj_id = objId
+		this.written_obj_pos[this.shaOfInt(objId)] = make(map[int]string, 0)
 	}
 }
 
 func (this *PdfWriter) endObj() {
 	this.out("endobj")
 
-	this.written_objs[this.shaOfInt(this.current_obj_id)] = this.current_obj
+	this.written_objs[this.shaOfInt(this.current_obj_id)] = this.current_obj.Bytes()
 	this.current_obj_id = -1
 }
 
 func (this *PdfWriter) shaOfInt(i int) string {
-    hasher := sha1.New()
-    hasher.Write([]byte(fmt.Sprintf("%s", i)))
-    sha := hex.EncodeToString(hasher.Sum(nil))
+	hasher := sha1.New()
+	hasher.Write([]byte(fmt.Sprintf("%s", i)))
+	sha := hex.EncodeToString(hasher.Sum(nil))
 	return sha
 }
 
 func (this *PdfWriter) outObjDec(objId int) {
-    sha := this.shaOfInt(objId)
-
-    this.offset += len(sha)
-	this.current_obj += sha
-
-	value := " 0 obj\n"
-	this.offset += len(value)
-	this.current_obj += value
+	// this.current_obj.WriteString(sha)
+	// value := " 0 obj\n"
+	// this.current_obj.WriteString(value)
 }
 
 func (this *PdfWriter) outObjRef(objId int) {
-    sha := this.shaOfInt(objId)
+	sha := this.shaOfInt(objId)
 
-    this.offset += len(sha)
-	this.current_obj += sha
+	if this.current_obj_id < 0 {
+		panic("fuck")
+	}
+
+	// Keep track of object hash and position - to be replaced with actual object id (integer)
+	this.written_obj_pos[this.shaOfInt(this.current_obj_id)][this.current_obj.Len()] = sha
+
+	this.current_obj.WriteString(sha)
 
 	value := " 0 R "
-	this.offset += len(value)
-	this.current_obj += value
+	this.current_obj.WriteString(value)
 }
 
 // Output PDF data with a newline
 func (this *PdfWriter) out(s string) {
-	this.offset += len(s)
-
-	if this.w != nil {
-		this.w.WriteString(s)
-	}
-
-	this.offset++
-
-	if this.w != nil {
-		this.w.WriteString("\n")
-	}
-
-	if this.current_obj_id > -1 {
-		this.current_obj += s + "\n"
-	}
+	this.current_obj.WriteString(s)
+	this.current_obj.WriteString("\n")
 }
 
 // Output PDF data
 func (this *PdfWriter) straightOut(s string) {
-	this.offset += len(s)
-
-	if this.w != nil {
-		this.w.WriteString(s)
-	}
-
-	this.current_obj += s
+	this.current_obj.WriteString(s)
 }
 
 // Output a PdfValue
@@ -516,9 +504,6 @@ func (this *PdfWriter) getTemplateSize(tplid int, _w float64, _h float64) map[st
 
 	tpl := this.tpls[tplid]
 
-	tpl.W /= 72
-	tpl.H /= 72
-
 	w := tpl.W
 	h := tpl.H
 
@@ -544,11 +529,8 @@ func (this *PdfWriter) getTemplateSize(tplid int, _w float64, _h float64) map[st
 func (this *PdfWriter) UseTemplate(tplid int, _x float64, _y float64, _w float64, _h float64) (string, float64, float64, float64, float64) {
 	tpl := this.tpls[tplid]
 
-	w := tpl.W // / 72
-	h := tpl.H // / 72
-
-	// why does X need this, but not Y??
-	//_x *= 72
+	w := tpl.W
+	h := tpl.H
 
 	_x += tpl.X
 	_y += tpl.Y
