@@ -228,10 +228,6 @@ func (this *PdfWriter) outObjDec(objId int) {
 func (this *PdfWriter) outObjRef(objId int) {
 	sha := this.shaOfInt(objId)
 
-	if this.current_obj_id < 0 {
-		panic("fuck")
-	}
-
 	// Keep track of object hash and position - to be replaced with actual object id (integer)
 	this.written_obj_pos[this.shaOfInt(this.current_obj_id)][this.current_obj.Len()] = sha
 
