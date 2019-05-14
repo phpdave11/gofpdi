@@ -4,6 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"compress/zlib"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"github.com/pkg/errors"
 	"math"
@@ -13,18 +15,32 @@ import (
 type PdfWriter struct {
 	f       *os.File
 	w       *bufio.Writer
+	r       *PdfReader
 	k       float64
 	tpls    []*PdfTemplate
+	m       int
 	n       int
 	offsets map[int]int
 	offset  int
+	result  map[int]string
 	// Keep track of which objects have already been written
-	obj_stack      map[int]*PdfValue
-	don_obj_stack  map[int]*PdfValue
-	written_objs   map[int]string
-	current_obj    string
-	current_obj_id int
-	tpl_id_offset  int
+	obj_stack       map[int]*PdfValue
+	don_obj_stack   map[int]*PdfValue
+	written_objs    map[*PdfObjectId][]byte
+	written_obj_pos map[*PdfObjectId]map[int]string
+	current_obj     *PdfObject
+	current_obj_id  int
+	tpl_id_offset   int
+}
+
+type PdfObjectId struct {
+	id   int
+	hash string
+}
+
+type PdfObject struct {
+	id     *PdfObjectId
+	buffer *bytes.Buffer
 }
 
 func (this *PdfWriter) SetTplIdOffset(n int) {
@@ -32,13 +48,13 @@ func (this *PdfWriter) SetTplIdOffset(n int) {
 }
 
 func (this *PdfWriter) Init() {
-	//this.n = 3
 	this.k = 1
-	this.offsets = make(map[int]int, 0)
 	this.obj_stack = make(map[int]*PdfValue, 0)
 	this.don_obj_stack = make(map[int]*PdfValue, 0)
 	this.tpls = make([]*PdfTemplate, 0)
-	this.written_objs = make(map[int]string, 0)
+	this.written_objs = make(map[*PdfObjectId][]byte, 0)
+	this.written_obj_pos = make(map[*PdfObjectId]map[int]string, 0)
+	this.current_obj = new(PdfObject)
 }
 
 func (this *PdfWriter) SetNextObjectID(id int) {
@@ -77,32 +93,29 @@ type PdfTemplate struct {
 	N         int
 }
 
-var k float64
-
-func (this *PdfWriter) GetImportedObjects() map[int]string {
+func (this *PdfWriter) GetImportedObjects() map[*PdfObjectId][]byte {
 	return this.written_objs
 }
 
+// For each object (uniquely identified by a sha1 hash), return the positions
+// of each hash within the object, to be replaced with pdf object ids (integers)
+func (this *PdfWriter) GetImportedObjHashPos() map[*PdfObjectId]map[int]string {
+	return this.written_obj_pos
+}
+
 func (this *PdfWriter) ClearImportedObjects() {
-	this.written_objs = make(map[int]string, 0)
+	this.written_objs = make(map[*PdfObjectId][]byte, 0)
 }
 
 // Create a PdfTemplate object from a page number (e.g. 1) and a boxName (e.g. MediaBox)
 func (this *PdfWriter) ImportPage(reader *PdfReader, pageno int, boxName string) (int, error) {
 	var err error
 
-	// TODO: Improve error handling
-	/*
-		if !in_array(boxName, availableBoxes) {
-			panic("box '" + boxName + "' not in available boxes")
-		}
-	*/
-
 	// Set default scale to 1
-	k = 1
+	this.k = 1
 
 	// Get all page boxes
-	pageBoxes, err := reader.getPageBoxes(1, k)
+	pageBoxes, err := reader.getPageBoxes(1, this.k)
 	if err != nil {
 		return -1, errors.Wrap(err, "Failed to get page boxes")
 	}
@@ -186,50 +199,53 @@ func (this *PdfWriter) newObj(objId int, onlyNewObj bool) {
 	}
 
 	if !onlyNewObj {
-		this.offsets[objId] = this.offset
-
-		this.out(fmt.Sprintf("%d 0 obj", objId))
-
-		this.current_obj = ""
+		// set current object id integer
 		this.current_obj_id = objId
+
+		// Create new PdfObject and PdfObjectId
+		this.current_obj = new(PdfObject)
+		this.current_obj.buffer = new(bytes.Buffer)
+		this.current_obj.id = new(PdfObjectId)
+		this.current_obj.id.id = objId
+		this.current_obj.id.hash = this.shaOfInt(objId)
+
+		this.written_obj_pos[this.current_obj.id] = make(map[int]string, 0)
 	}
 }
 
 func (this *PdfWriter) endObj() {
 	this.out("endobj")
 
-	this.written_objs[this.current_obj_id] = this.current_obj
+	this.written_objs[this.current_obj.id] = this.current_obj.buffer.Bytes()
 	this.current_obj_id = -1
+}
+
+func (this *PdfWriter) shaOfInt(i int) string {
+	hasher := sha1.New()
+	hasher.Write([]byte(fmt.Sprintf("%s-%s", i, this.r.sourceFile)))
+	sha := hex.EncodeToString(hasher.Sum(nil))
+	return sha
+}
+
+func (this *PdfWriter) outObjRef(objId int) {
+	sha := this.shaOfInt(objId)
+
+	// Keep track of object hash and position - to be replaced with actual object id (integer)
+	this.written_obj_pos[this.current_obj.id][this.current_obj.buffer.Len()] = sha
+
+	this.current_obj.buffer.WriteString(sha)
+	this.current_obj.buffer.WriteString(" 0 R ")
 }
 
 // Output PDF data with a newline
 func (this *PdfWriter) out(s string) {
-	this.offset += len(s)
-
-	if this.w != nil {
-		this.w.WriteString(s)
-	}
-
-	this.offset++
-
-	if this.w != nil {
-		this.w.WriteString("\n")
-	}
-
-	if this.current_obj_id > -1 {
-		this.current_obj += s + "\n"
-	}
+	this.current_obj.buffer.WriteString(s)
+	this.current_obj.buffer.WriteString("\n")
 }
 
 // Output PDF data
 func (this *PdfWriter) straightOut(s string) {
-	this.offset += len(s)
-
-	if this.w != nil {
-		this.w.WriteString(s)
-	}
-
-	this.current_obj += s
+	this.current_obj.buffer.WriteString(s)
 }
 
 // Output a PdfValue
@@ -275,7 +291,8 @@ func (this *PdfWriter) writeValue(value *PdfValue) {
 
 		// Get object ID from don_obj_stack
 		objId := this.don_obj_stack[value.Id].NewId
-		this.out(fmt.Sprintf("%d 0 R", objId))
+		this.outObjRef(objId)
+		//this.out(fmt.Sprintf("%d 0 R", objId))
 		break
 
 	case PDF_TYPE_STRING:
@@ -311,9 +328,13 @@ func (this *PdfWriter) writeValue(value *PdfValue) {
 }
 
 // Output Form XObjects (1 for each template)
-func (this *PdfWriter) PutFormXobjects(reader *PdfReader) (map[string]int, error) {
+// returns a map of template names (e.g. /GOFPDITPL1) to PdfObjectId
+func (this *PdfWriter) PutFormXobjects(reader *PdfReader) (map[string]*PdfObjectId, error) {
+	// Set current reader
+	this.r = reader
+
 	var err error
-	var result = make(map[string]int, 0)
+	var result = make(map[string]*PdfObjectId, 0)
 
 	compress := true
 	filter := ""
@@ -346,13 +367,16 @@ func (this *PdfWriter) PutFormXobjects(reader *PdfReader) (map[string]int, error
 		tpl.N = this.n
 
 		// Return xobject form name and object position
-		result[fmt.Sprintf("/GOFPDITPL%d", i+this.tpl_id_offset)] = cN
+		pdfObjId := new(PdfObjectId)
+		pdfObjId.id = cN
+		pdfObjId.hash = this.shaOfInt(cN)
+		result[fmt.Sprintf("/GOFPDITPL%d", i+this.tpl_id_offset)] = pdfObjId
 
 		this.out("<<" + filter + "/Type /XObject")
 		this.out("/Subtype /Form")
 		this.out("/FormType 1")
 
-		this.out(fmt.Sprintf("/BBox [%.2F %.2F %.2F %.2F]", tpl.Box["llx"]*k, tpl.Box["lly"]*k, (tpl.Box["urx"]+tpl.X)*k, (tpl.Box["ury"]-tpl.Y)*k))
+		this.out(fmt.Sprintf("/BBox [%.2F %.2F %.2F %.2F]", tpl.Box["llx"]*this.k, tpl.Box["lly"]*this.k, (tpl.Box["urx"]+tpl.X)*this.k, (tpl.Box["ury"]-tpl.Y)*this.k))
 
 		var c, s, tx, ty float64
 		c = 1
@@ -388,8 +412,8 @@ func (this *PdfWriter) PutFormXobjects(reader *PdfReader) (map[string]int, error
 			ty = tpl.Box["y"] * 2
 		}
 
-		tx *= k
-		ty *= k
+		tx *= this.k
+		ty *= this.k
 
 		if c != 1 || s != 0 || tx != 0 || ty != 0 {
 			this.out(fmt.Sprintf("/Matrix [%.5F %.5F %.5F %.5F %.5F %.5F]", c, s, -s, c, tx, ty))
@@ -483,9 +507,6 @@ func (this *PdfWriter) getTemplateSize(tplid int, _w float64, _h float64) map[st
 
 	tpl := this.tpls[tplid]
 
-	tpl.W /= 72
-	tpl.H /= 72
-
 	w := tpl.W
 	h := tpl.H
 
@@ -511,11 +532,8 @@ func (this *PdfWriter) getTemplateSize(tplid int, _w float64, _h float64) map[st
 func (this *PdfWriter) UseTemplate(tplid int, _x float64, _y float64, _w float64, _h float64) (string, float64, float64, float64, float64) {
 	tpl := this.tpls[tplid]
 
-	w := tpl.W // / 72
-	h := tpl.H // / 72
-
-	// why does X need this, but not Y??
-	//_x *= 72
+	w := tpl.W
+	h := tpl.H
 
 	_x += tpl.X
 	_y += tpl.Y
@@ -536,5 +554,5 @@ func (this *PdfWriter) UseTemplate(tplid int, _x float64, _y float64, _w float64
 	tData["ty"] = (0 - _y - _h)
 	tData["lty"] = (0 - _y - _h) - (0-h)*(_h/h)
 
-	return fmt.Sprintf("/GOFPDITPL%d", tplid+this.tpl_id_offset), tData["scaleX"], tData["scaleY"], tData["tx"] * k, tData["ty"] * k
+	return fmt.Sprintf("/GOFPDITPL%d", tplid+this.tpl_id_offset), tData["scaleX"], tData["scaleY"], tData["tx"] * this.k, tData["ty"] * this.k
 }
