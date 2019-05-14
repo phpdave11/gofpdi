@@ -22,6 +22,7 @@ type PdfReader struct {
 	xrefPos        int
 	xref           []map[int]int
 	f              *os.File
+	sourceFile     string
 }
 
 func NewPdfReader(filename string) (*PdfReader, error) {
@@ -34,6 +35,7 @@ func NewPdfReader(filename string) (*PdfReader, error) {
 	parser := &PdfReader{}
 	parser.init()
 	parser.f = f
+	parser.sourceFile = filename
 	err = parser.read()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to read pdf")

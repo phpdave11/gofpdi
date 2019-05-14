@@ -16,6 +16,7 @@ import (
 type PdfWriter struct {
 	f       *os.File
 	w       *bufio.Writer
+	r       *PdfReader
 	k       float64
 	tpls    []*PdfTemplate
 	n       int
@@ -214,7 +215,7 @@ func (this *PdfWriter) endObj() {
 
 func (this *PdfWriter) shaOfInt(i int) string {
 	hasher := sha1.New()
-	hasher.Write([]byte(fmt.Sprintf("%s", i)))
+	hasher.Write([]byte(fmt.Sprintf("%s-%s", i, this.r.sourceFile)))
 	sha := hex.EncodeToString(hasher.Sum(nil))
 	return sha
 }
@@ -329,6 +330,9 @@ func (this *PdfWriter) writeValue(value *PdfValue) {
 
 // Output Form XObjects (1 for each template)
 func (this *PdfWriter) PutFormXobjects(reader *PdfReader) (map[string]string, error) {
+	// Set current reader
+	this.r = reader
+
 	var err error
 	var result = make(map[string]string, 0)
 
