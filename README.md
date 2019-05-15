@@ -4,13 +4,21 @@
 
 Based on [fpdi](https://github.com/Setasign/FPDI/tree/1.6.x-legacy)
 
-### Example
+gofpdi allows you to import an existing PDF into a new PDF.  Currently the following PDF generation libraries are supported:
+
+[gopdf](https://github.com/signintech/gopdf)
+
+[gofpdf](https://github.com/jung-kurt/gofpdf)
+
+
+
+### gopdf example
 
 ```
 package main
 
 import (
-        "github.com/phpdave11/gopdf"
+        "github.com/signintech/gopdf"
         "io"
         "net/http"
         "os"
@@ -89,10 +97,80 @@ func DownloadFile(filepath string, url string) error {
 }
 ```
 
-Generated PDF:
-
-[example.pdf](https://github.com/signintech/gopdf/files/3144466/example.pdf)
+Generated PDF: [example.pdf](https://github.com/signintech/gopdf/files/3144466/example.pdf)
 
 Screenshot of PDF:
 
 ![example](https://user-images.githubusercontent.com/9421180/57180557-4c1dbd80-6e4f-11e9-8f47-9d40217805be.jpg)
+
+### gofpdf example
+
+```
+package main
+
+import (
+	"github.com/jung-kurt/gofpdf"
+	"github.com/jung-kurt/gofpdf/contrib/gofpdi"
+	"io"
+	"net/http"
+	"os"
+)
+
+func main() {
+	var err error
+
+	pdf := gofpdf.New("P", "mm", "A4", "")
+
+	// Download a PDF
+	fileUrl := "https://tcpdf.org/files/examples/example_026.pdf"
+	if err = DownloadFile("example-pdf.pdf", fileUrl); err != nil {
+		panic(err)
+	}
+
+	// Import example-pdf.pdf with gofpdi free pdf document importer
+	tpl1 := gofpdi.ImportPage(pdf, "example-pdf.pdf", 1, "/MediaBox")
+
+	pdf.AddPage()
+
+	pdf.SetFillColor(200, 700, 220)
+	pdf.Rect(20, 50, 150, 215, "F")
+
+	// Draw imported template onto page
+	gofpdi.UseImportedTemplate(pdf, tpl1, 20, 50, 150, 0)
+
+	pdf.SetFont("Helvetica", "", 20)
+	pdf.Cell(0, 0, "Import existing PDF into gofpdf document with gofpdi")
+
+	err = pdf.OutputFileAndClose("example.pdf")
+	if err != nil {
+		panic(err)
+	}
+}
+
+// DownloadFile will download a url to a local file. It's efficient because it will
+// write as it downloads and not load the whole file into memory.
+func DownloadFile(filepath string, url string) error {
+	// Get the data
+	resp, err := http.Get(url)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Create the file
+	out, err := os.Create(filepath)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	// Write the body to file
+	_, err = io.Copy(out, resp.Body)
+	return err
+}
+```
+
+Generated PDF:  [example.pdf](https://github.com/jung-kurt/gofpdf/files/3178770/example.pdf)
+
+Screenshot of PDF:
+![example](https://user-images.githubusercontent.com/9421180/57713804-ca8d1300-7638-11e9-9f8e-e3f803374803.jpg)
