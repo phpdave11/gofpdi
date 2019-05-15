@@ -113,6 +113,7 @@ func (this *Importer) PutFormXobjects() map[string]int {
 
 // Put form xobjects and get back a map of template names (e.g. /GOFPDITPL1) and their object ids (sha1 hash)
 func (this *Importer) PutFormXobjectsUnordered() map[string]string {
+	this.GetWriter().SetUseHash(true)
 	res := make(map[string]string, 0)
 	tplNamesIds, _ := this.GetWriter().PutFormXobjects(this.GetReader())
 	for tplName, pdfObjId := range tplNamesIds {

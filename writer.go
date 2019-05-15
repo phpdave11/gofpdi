@@ -31,6 +31,7 @@ type PdfWriter struct {
 	current_obj     *PdfObject
 	current_obj_id  int
 	tpl_id_offset   int
+	use_hash        bool
 }
 
 type PdfObjectId struct {
@@ -55,6 +56,10 @@ func (this *PdfWriter) Init() {
 	this.written_objs = make(map[*PdfObjectId][]byte, 0)
 	this.written_obj_pos = make(map[*PdfObjectId]map[int]string, 0)
 	this.current_obj = new(PdfObject)
+}
+
+func (this *PdfWriter) SetUseHash(b bool) {
+	this.use_hash = b
 }
 
 func (this *PdfWriter) SetNextObjectID(id int) {
@@ -233,7 +238,11 @@ func (this *PdfWriter) outObjRef(objId int) {
 	// Keep track of object hash and position - to be replaced with actual object id (integer)
 	this.written_obj_pos[this.current_obj.id][this.current_obj.buffer.Len()] = sha
 
-	this.current_obj.buffer.WriteString(sha)
+	if this.use_hash {
+		this.current_obj.buffer.WriteString(sha)
+	} else {
+		this.current_obj.buffer.WriteString(fmt.Sprintf("%d", objId))
+	}
 	this.current_obj.buffer.WriteString(" 0 R ")
 }
 
