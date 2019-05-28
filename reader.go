@@ -542,6 +542,16 @@ func (this *PdfReader) findXref() error {
 
 	toRead = 1500
 
+	// If PDF is smaller than 1500 bytes, be sure to only read the number of bytes that are in the file
+	info, err := this.f.Stat()
+	if err != nil {
+		return errors.Wrap(err, "Failed to obtain file information")
+	}
+	fileSize := info.Size()
+	if fileSize < toRead {
+		toRead = fileSize
+	}
+
 	// 0 means relative to the origin of the file,
 	// 1 means relative to the current offset,
 	// and 2 means relative to the end.
