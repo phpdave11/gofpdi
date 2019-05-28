@@ -10,7 +10,6 @@ import (
 	"math"
 	"os"
 	"strconv"
-	"strings"
 )
 
 type PdfReader struct {
@@ -20,7 +19,7 @@ type PdfReader struct {
 	catalog        *PdfValue
 	pages          []*PdfValue
 	xrefPos        int
-	xref           []map[int]int
+	xref           map[int]map[int]int
 	f              *os.File
 	sourceFile     string
 }
@@ -36,6 +35,7 @@ func NewPdfReader(filename string) (*PdfReader, error) {
 	parser.init()
 	parser.f = f
 	parser.sourceFile = filename
+	parser.xref = make(map[int]map[int]int, 0)
 	err = parser.read()
 	if err != nil {
 		return nil, errors.Wrap(err, "Failed to read pdf")
@@ -563,29 +563,31 @@ func (this *PdfReader) findXref() error {
 		return errors.Wrap(err, "Failed to set position of file")
 	}
 
-	// Allocate data
-	var data []byte
-	data = make([]byte, toRead)
+	// Create new bufio.Reader
+	r := bufio.NewReader(this.f)
+	for {
+		// Read all tokens until "startxref" is found
+		token, err := this.readToken(r)
+		if err != nil {
+			return errors.Wrap(err, "Failed to read token")
+		}
 
-	// Read []byte into data
-	_, err = this.f.Read(data)
-	if err != nil {
-		return errors.Wrap(err, "Failed to read bytes from file into []byte")
-	}
-
-	foundStartXref := false
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
-		if foundStartXref {
-			// Convert line (string) into int
-			result, err = strconv.Atoi(line)
+		if token == "startxref" {
+			token, err = this.readToken(r)
+			// Probably EOF before finding startxref
 			if err != nil {
-				return errors.Wrap(err, "Failed to convert xref position into integer: "+line)
+				return errors.Wrap(err, "Failed to find startxref token")
 			}
+
+			// Convert line (string) into int
+			result, err = strconv.Atoi(token)
+			if err != nil {
+				return errors.Wrap(err, "Failed to convert xref position into integer: "+token)
+			}
+
+			// Successfully read the xref position
+			this.xrefPos = result
 			break
-		} else if line == "startxref" {
-			// The next line will be the value we want to return
-			foundStartXref = true
 		}
 	}
 
@@ -620,16 +622,19 @@ func (this *PdfReader) readXref() error {
 		return errors.Wrap(err, "Failed to read token")
 	}
 	if t != "xref" {
-		return errors.New("Expected xref to start with 'xref'")
+		return errors.New("Expected xref to start with 'xref'.  Got: " + t)
 	}
 
-	// Next value should always be '0'
+	// Next value will be the starting object id (usually 0, but not always)
 	t, err = this.readToken(r)
 	if err != nil {
 		return errors.Wrap(err, "Failed to read token")
 	}
-	if t != "0" {
-		return errors.New("Expected next token in xref to be '0'")
+
+	// Convert token to int
+	startObject, err := strconv.Atoi(t)
+	if err != nil {
+		return errors.Wrap(err, "Failed to convert start object to integer: "+t)
 	}
 
 	// Determine how many objects there are
@@ -637,16 +642,15 @@ func (this *PdfReader) readXref() error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to read token")
 	}
-	maxObject, err := strconv.Atoi(t)
+
+	// Convert token to int
+	numObject, err := strconv.Atoi(t)
 	if err != nil {
-		return errors.Wrap(err, "Failed to convert max object to integer: "+t)
+		return errors.Wrap(err, "Failed to convert num object to integer: "+t)
 	}
 
-	// Create a slice of map[int]int with capacity of maxObject
-	data := make([]map[int]int, maxObject)
-
 	// For all objects in xref, read object position, object generation, and status (free or new)
-	for i := 0; i < maxObject; i++ {
+	for i := startObject; i < startObject+numObject; i++ {
 		t, err = this.readToken(r)
 		if err != nil {
 			return errors.Wrap(err, "Failed to read token")
@@ -678,11 +682,11 @@ func (this *PdfReader) readXref() error {
 			return errors.New("Expected objStatus to be 'n' or 'f', got: " + objStatus)
 		}
 
-		// Allocate map[int]int
-		data[i] = make(map[int]int, 1)
+		// Append map[int]int
+		this.xref[i] = make(map[int]int, 1)
 
 		// Set object id, generation, and position
-		data[i][objGen] = objPos
+		this.xref[i][objGen] = objPos
 	}
 
 	// Next, parse trailer
@@ -700,13 +704,22 @@ func (this *PdfReader) readXref() error {
 	}
 
 	// Read trailer dictionary
-	this.trailer, err = this.readValue(r, t)
+	trailer, err := this.readValue(r, t)
 	if err != nil {
 		return errors.Wrap(err, "Failed to read value for token: "+t)
 	}
 
-	// set xref table
-	this.xref = data
+	// If /Root is set, then set trailer object so that /Root can be read later
+	if _, ok := trailer.Dictionary["/Root"]; ok {
+		this.trailer = trailer
+	}
+
+	// If a /Prev xref trailer is specified, parse that
+	if tr, ok := trailer.Dictionary["/Prev"]; ok {
+		// Resolve parent xref table
+		this.xrefPos = tr.Int
+		return this.readXref()
+	}
 
 	return nil
 }
