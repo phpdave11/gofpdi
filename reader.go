@@ -1002,18 +1002,18 @@ func (this *PdfReader) getPageBox(page *PdfValue, box_index string, k float64) (
 			result["lly"] = math.Min(box.Array[1].Real, box.Array[3].Real)
 			result["urx"] = math.Max(box.Array[0].Real, box.Array[2].Real)
 			result["ury"] = math.Max(box.Array[1].Real, box.Array[3].Real)
-		} else if _, ok := page.Value.Dictionary["/Parent"]; ok {
-			parentObj, err := this.resolveObject(page.Value.Dictionary["/Parent"])
-			if err != nil {
-				return nil, errors.Wrap(err, "Could not resolve parent object")
-			}
-
-			// If the page box is inherited from /Parent, recursively return page box of parent
-			return this.getPageBox(parentObj, box_index, k)
 		} else {
 			// TODO: Improve error handling
-			return nil, errors.New("Could not get page box, and no parent exists")
+			return nil, errors.New("Could not get page box")
 		}
+	} else if _, ok := page.Value.Dictionary["/Parent"]; ok {
+		parentObj, err := this.resolveObject(page.Value.Dictionary["/Parent"])
+		if err != nil {
+			return nil, errors.Wrap(err, "Could not resolve parent object")
+		}
+
+		// If the page box is inherited from /Parent, recursively return page box of parent
+		return this.getPageBox(parentObj, box_index, k)
 	}
 
 	return result, nil
@@ -1054,10 +1054,8 @@ func (this *PdfReader) _getPageRotation(page *PdfValue) (*PdfValue, error) {
 		// Otherwise, return the object
 		return res, nil
 	} else {
-		if _, ok := page.Value.Dictionary["/Parent"]; !ok {
-			// If we got here and page does not have a /Parent, that is an error
-			return nil, errors.New("No parent for page rotation")
-		} else {
+		// Check to see if parent has a rotation
+		if _, ok := page.Value.Dictionary["/Parent"]; ok {
 			// Recursively return /Parent page rotation
 			res, err := this._getPageRotation(page.Value.Dictionary["/Parent"])
 			if err != nil {
@@ -1074,7 +1072,7 @@ func (this *PdfReader) _getPageRotation(page *PdfValue) (*PdfValue, error) {
 		}
 	}
 
-	return &PdfValue{}, nil
+	return &PdfValue{Int: 0}, nil
 }
 
 func (this *PdfReader) read() error {

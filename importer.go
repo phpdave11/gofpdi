@@ -160,6 +160,5 @@ func (this *Importer) GetImportedObjHashPos() map[string]map[int]string {
 func (this *Importer) UseTemplate(tplid int, _x float64, _y float64, _w float64, _h float64) (string, float64, float64, float64, float64) {
 	// Look up template id in importer tpl map
 	tplInfo := this.tplMap[tplid]
-
 	return tplInfo.Writer.UseTemplate(tplInfo.TemplateId, _x, _y, _w, _h)
 }
