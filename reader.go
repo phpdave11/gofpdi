@@ -386,6 +386,7 @@ func (this *PdfReader) readValue(r *bufio.Reader, t string) (*PdfValue, error) {
 			if n, err := strconv.Atoi(t); err == nil {
 				result.Type = PDF_TYPE_NUMERIC
 				result.Int = n
+				result.Real = float64(n) // Also assign Real value here to fix page box parsing bugs
 			} else {
 				result.Type = PDF_TYPE_REAL
 				result.Real, _ = strconv.ParseFloat(t, 64)
@@ -483,8 +484,23 @@ func (this *PdfReader) resolveObject(objSpec *PdfValue) (*PdfValue, error) {
 				return nil, errors.Wrap(err, "Failed to skip whitespace")
 			}
 
-			// Read stream data
-			length := value.Dictionary["/Length"].Int
+			// Get stream length dictionary
+			lengthDict := value.Dictionary["/Length"]
+
+			// Get number of bytes of stream
+			length := lengthDict.Int
+
+			// If lengthDict is an object reference, resolve the object and set length
+			if lengthDict.Type == PDF_TYPE_OBJREF {
+				lengthDict, err = this.resolveObject(lengthDict)
+
+				if err != nil {
+					return nil, errors.Wrap(err, "Failed to resolve length object of stream")
+				}
+
+				// Set length to resolved object value
+				length = lengthDict.Value.Int
+			}
 
 			// Read length bytes
 			bytes := make([]byte, length)
