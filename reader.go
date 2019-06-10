@@ -325,6 +325,15 @@ func (this *PdfReader) readValue(r *bufio.Reader, t string) (*PdfValue, error) {
 
 			case ')':
 				openBrackets--
+
+			case '\\':
+				nb, err := r.ReadByte()
+				if err != nil {
+					return nil, errors.Wrap(err, "Failed to read byte")
+				}
+
+				s += string(b) + string(nb)
+				continue
 			}
 
 			if openBrackets > 0 {

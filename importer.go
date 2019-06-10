@@ -104,7 +104,10 @@ func (this *Importer) SetNextObjectID(objId int) {
 // Put form xobjects and get back a map of template names (e.g. /GOFPDITPL1) and their object ids (int)
 func (this *Importer) PutFormXobjects() map[string]int {
 	res := make(map[string]int, 0)
-	tplNamesIds, _ := this.GetWriter().PutFormXobjects(this.GetReader())
+	tplNamesIds, err := this.GetWriter().PutFormXobjects(this.GetReader())
+	if err != nil {
+		panic(err)
+	}
 	for tplName, pdfObjId := range tplNamesIds {
 		res[tplName] = pdfObjId.id
 	}
@@ -115,7 +118,10 @@ func (this *Importer) PutFormXobjects() map[string]int {
 func (this *Importer) PutFormXobjectsUnordered() map[string]string {
 	this.GetWriter().SetUseHash(true)
 	res := make(map[string]string, 0)
-	tplNamesIds, _ := this.GetWriter().PutFormXobjects(this.GetReader())
+	tplNamesIds, err := this.GetWriter().PutFormXobjects(this.GetReader())
+	if err != nil {
+		panic(err)
+	}
 	for tplName, pdfObjId := range tplNamesIds {
 		res[tplName] = pdfObjId.hash
 	}
