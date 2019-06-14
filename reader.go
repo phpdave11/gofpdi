@@ -310,11 +310,14 @@ func (this *PdfReader) readValue(r *bufio.Reader, t string) (*PdfValue, error) {
 		// This is a string
 
 		openBrackets := 1
-		var s string
+
+		// Create new buffer
+		var buf bytes.Buffer
 
 		// Read bytes until brackets are balanced
 		for openBrackets > 0 {
 			b, err := r.ReadByte()
+
 			if err != nil {
 				return nil, errors.Wrap(err, "Failed to read byte")
 			}
@@ -332,17 +335,19 @@ func (this *PdfReader) readValue(r *bufio.Reader, t string) (*PdfValue, error) {
 					return nil, errors.Wrap(err, "Failed to read byte")
 				}
 
-				s += string(b) + string(nb)
+				buf.WriteByte(b)
+				buf.WriteByte(nb)
+
 				continue
 			}
 
 			if openBrackets > 0 {
-				s += string(b)
+				buf.WriteByte(b)
 			}
 		}
 
 		result.Type = PDF_TYPE_STRING
-		result.String = s
+		result.String = buf.String()
 
 	case "stream":
 		return nil, errors.New("Stream not implemented")
