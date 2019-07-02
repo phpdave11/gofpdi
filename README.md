@@ -14,7 +14,7 @@ gofpdi allows you to import an existing PDF into a new PDF.  Currently the follo
 
 ### gopdf example
 
-```
+```go
 package main
 
 import (
@@ -105,7 +105,7 @@ Screenshot of PDF:
 
 ### gofpdf example
 
-```
+```go
 package main
 
 import (
