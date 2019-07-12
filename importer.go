@@ -79,6 +79,16 @@ func (this *Importer) SetSourceFile(f string) {
 	}
 }
 
+func (this *Importer) GetPageSizes() map[int]map[string]map[string]float64 {
+	result, err := this.GetReader().getAllPageBoxes(1.0)
+
+	if err != nil {
+		panic(err)
+	}
+
+	return result
+}
+
 func (this *Importer) ImportPage(pageno int, box string) int {
 	res, err := this.GetWriter().ImportPage(this.GetReader(), pageno, box)
 	if err != nil {

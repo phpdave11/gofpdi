@@ -983,6 +983,22 @@ func (this *PdfReader) rebuildContentStream(content *PdfValue) ([]byte, error) {
 	return stream, nil
 }
 
+func (this *PdfReader) getAllPageBoxes(k float64) (map[int]map[string]map[string]float64, error) {
+	var err error
+
+	// Allocate result with the number of available boxes
+	result := make(map[int]map[string]map[string]float64, len(this.pages))
+
+	for i := 1; i <= len(this.pages); i++ {
+		result[i], err = this.getPageBoxes(i, k)
+		if result[i] == nil {
+			return nil, errors.Wrap(err, "Unable to get page box")
+		}
+	}
+
+	return result, nil
+}
+
 // Get all page box data
 func (this *PdfReader) getPageBoxes(pageno int, k float64) (map[string]map[string]float64, error) {
 	var err error
