@@ -1,5 +1,7 @@
 package gofpdi
 
+import "io"
+
 // The Importer class to be used by a pdf generation library
 type Importer struct {
 	sourceFile string
@@ -69,12 +71,36 @@ func (this *Importer) SetSourceFile(f string) {
 	// If writer hasn't been instantiated, do that now
 	if _, ok := this.writers[this.sourceFile]; !ok {
 		writer, err := NewPdfWriter("")
-
-		// Make the next writer start template numbers at this.tplN
-		writer.SetTplIdOffset(this.tplN)
 		if err != nil {
 			panic(err)
 		}
+
+		// Make the next writer start template numbers at this.tplN
+		writer.SetTplIdOffset(this.tplN)
+		this.writers[this.sourceFile] = writer
+	}
+}
+
+func (this *Importer) SetSourceStream(fileName string, rs io.ReadSeeker, nBytes int64) {
+	this.sourceFile = fileName
+
+	if _, ok := this.readers[this.sourceFile]; !ok {
+		reader, err := NewPdfReaderFromStream(rs, nBytes)
+		if err != nil {
+			panic(err)
+		}
+		this.readers[this.sourceFile] = reader
+	}
+
+	// If writer hasn't been instantiated, do that now
+	if _, ok := this.writers[this.sourceFile]; !ok {
+		writer, err := NewPdfWriter("")
+		if err != nil {
+			panic(err)
+		}
+
+		// Make the next writer start template numbers at this.tplN
+		writer.SetTplIdOffset(this.tplN)
 		this.writers[this.sourceFile] = writer
 	}
 }
