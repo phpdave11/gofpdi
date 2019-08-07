@@ -25,8 +25,12 @@ type PdfReader struct {
 	sourceFile     string
 }
 
-func NewPdfReaderFromStream(rs io.ReadSeeker, n int64) (*PdfReader, error) {
-	parser := &PdfReader{f: rs, nBytes: n}
+func NewPdfReaderFromStream(rs io.ReadSeeker) (*PdfReader, error) {
+	length, err := rs.Seek(0, 2)
+	if err != nil {
+		return nil, errors.Wrapf(err, "Failed to determine stream length")
+	}
+	parser := &PdfReader{f: rs, nBytes: length}
 	if err := parser.init(); err != nil {
 		return nil, errors.Wrap(err, "Failed to initialize parser")
 	}

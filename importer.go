@@ -81,11 +81,11 @@ func (this *Importer) SetSourceFile(f string) {
 	}
 }
 
-func (this *Importer) SetSourceStream(fileName string, rs io.ReadSeeker, nBytes int64) {
+func (this *Importer) SetSourceStream(fileName string, rs io.ReadSeeker) {
 	this.sourceFile = fileName
 
 	if _, ok := this.readers[this.sourceFile]; !ok {
-		reader, err := NewPdfReaderFromStream(rs, nBytes)
+		reader, err := NewPdfReaderFromStream(rs)
 		if err != nil {
 			panic(err)
 		}
