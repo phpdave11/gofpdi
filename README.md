@@ -2,13 +2,15 @@
 
 ## Go Free PDF Document Importer
 
-Based on [fpdi](https://github.com/Setasign/FPDI/tree/1.6.x-legacy)
-
 gofpdi allows you to import an existing PDF into a new PDF.  Currently the following PDF generation libraries are supported:
 
 [gopdf](https://github.com/signintech/gopdf)
 
 [gofpdf](https://github.com/jung-kurt/gofpdf)
+
+## Acknowledgments
+This package’s code is derived from the [fpdi](https://github.com/Setasign/FPDI/tree/1.6.x-legacy) library created by [Jan Slabon](https://github.com/JanSlabon).
+[mrtsbt](https://github.com/mrtsbt) added support for reading a PDF from an `io.ReadSeeker` stream.
 
 
 
@@ -103,7 +105,7 @@ Screenshot of PDF:
 
 ![example](https://user-images.githubusercontent.com/9421180/57180557-4c1dbd80-6e4f-11e9-8f47-9d40217805be.jpg)
 
-### gofpdf example
+### gofpdf example #1 - import PDF from file
 
 ```go
 package main
@@ -174,3 +176,66 @@ Generated PDF:  [example.pdf](https://github.com/jung-kurt/gofpdf/files/3178770/
 
 Screenshot of PDF:
 ![example](https://user-images.githubusercontent.com/9421180/57713804-ca8d1300-7638-11e9-9f8e-e3f803374803.jpg)
+
+
+
+### gofpdf example #2 - import PDF from stream
+
+```go
+package main
+
+import (
+    "bytes"
+    "github.com/jung-kurt/gofpdf"
+    "github.com/jung-kurt/gofpdf/contrib/gofpdi"
+    "io/ioutil"
+    "net/http"
+)
+
+func main() {
+    var err error
+
+    pdf := gofpdf.New("P", "mm", "A4", "")
+
+    // Download a PDF into memory                                                                                                                     
+    res, err := http.Get("https://tcpdf.org/files/examples/example_038.pdf")
+    if err != nil {
+        panic(err)
+    }
+    pdfBytes, err := ioutil.ReadAll(res.Body)
+    res.Body.Close()
+    if err != nil {
+        panic(err)
+    }
+
+    // convert []byte to io.ReadSeeker                                                                                                                
+    rs := bytes.NewReader(pdfBytes)
+
+    // Import in-memory PDF stream with gofpdi free pdf document importer                                                                             
+    tpl1 := gofpdi.ImportPageFromStream(pdf, rs, 1, "/TrimBox")
+
+    pdf.AddPage()
+
+    pdf.SetFillColor(200, 700, 220)
+    pdf.Rect(20, 50, 150, 215, "F")
+
+    // Draw imported template onto page                                                                                                               
+    gofpdi.UseImportedTemplate(pdf, tpl1, 20, 50, 150, 0)
+
+    pdf.SetFont("Helvetica", "", 20)
+    pdf.Cell(0, 0, "Import existing PDF into gofpdf document with gofpdi")
+
+    err = pdf.OutputFileAndClose("example.pdf")
+    if err != nil {
+        panic(err)
+    }
+}
+```
+
+Generated PDF:
+
+[example.pdf](https://github.com/phpdave11/gofpdi/files/3483219/example.pdf)
+
+Screenshot of PDF:
+
+![example.jpg](https://user-images.githubusercontent.com/9421180/62728726-18b87500-b9e2-11e9-885c-7c68b7ac6222.jpg)
