@@ -1,6 +1,9 @@
 package gofpdi
 
-import "io"
+import (
+	"fmt"
+	"io"
+)
 
 // The Importer class to be used by a pdf generation library
 type Importer struct {
@@ -81,8 +84,8 @@ func (this *Importer) SetSourceFile(f string) {
 	}
 }
 
-func (this *Importer) SetSourceStream(fileName string, rs io.ReadSeeker) {
-	this.sourceFile = fileName
+func (this *Importer) SetSourceStream(rs io.ReadSeeker) {
+	this.sourceFile = fmt.Sprintf("%v", &rs)
 
 	if _, ok := this.readers[this.sourceFile]; !ok {
 		reader, err := NewPdfReaderFromStream(rs)
