@@ -2,11 +2,11 @@
 
 ## Go Free PDF Document Importer
 
-gofpdi allows you to import an existing PDF into a new PDF.  Currently the following PDF generation libraries are supported:
+gofpdi allows you to import an existing PDF into a new PDF.  The following PDF generation libraries are supported:
 
-[gopdf](https://github.com/signintech/gopdf)
+- [gopdf](https://github.com/signintech/gopdf)
 
-[gofpdf](https://github.com/jung-kurt/gofpdf)
+- [gofpdf](https://github.com/jung-kurt/gofpdf)
 
 ## Acknowledgments
 This package’s code is derived from the [fpdi](https://github.com/Setasign/FPDI/tree/1.6.x-legacy) library created by [Jan Slabon](https://github.com/JanSlabon).
