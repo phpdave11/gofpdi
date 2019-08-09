@@ -212,7 +212,7 @@ func main() {
     rs := bytes.NewReader(pdfBytes)
 
     // Import in-memory PDF stream with gofpdi free pdf document importer                                                                             
-    tpl1 := gofpdi.ImportPageFromStream(pdf, rs, 1, "/TrimBox")
+    tpl1 := gofpdi.ImportPageFromStream(pdf, &rs, 1, "/TrimBox")
 
     pdf.AddPage()
 
