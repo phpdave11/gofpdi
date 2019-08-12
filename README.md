@@ -223,7 +223,7 @@ func main() {
     gofpdi.UseImportedTemplate(pdf, tpl1, 20, 50, 150, 0)
 
     pdf.SetFont("Helvetica", "", 20)
-    pdf.Cell(0, 0, "Import existing PDF into gofpdf document with gofpdi")
+    pdf.Cell(0, 0, "Import PDF stream into gofpdf document with gofpdi")
 
     err = pdf.OutputFileAndClose("example.pdf")
     if err != nil {
