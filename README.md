@@ -188,6 +188,7 @@ import (
     "bytes"
     "github.com/jung-kurt/gofpdf"
     "github.com/jung-kurt/gofpdf/contrib/gofpdi"
+    "io"
     "io/ioutil"
     "net/http"
 )
@@ -209,7 +210,7 @@ func main() {
     }
 
     // convert []byte to io.ReadSeeker                                                                                                                
-    rs := bytes.NewReader(pdfBytes)
+    rs := io.ReadSeeker(bytes.NewReader(pdfBytes))
 
     // Import in-memory PDF stream with gofpdi free pdf document importer                                                                             
     tpl1 := gofpdi.ImportPageFromStream(pdf, &rs, 1, "/TrimBox")
