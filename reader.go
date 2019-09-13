@@ -675,85 +675,83 @@ func (this *PdfReader) readXref() error {
 		return errors.New("Expected xref to start with 'xref'.  Got: " + t)
 	}
 
-	// Next value will be the starting object id (usually 0, but not always)
-	t, err = this.readToken(r)
-	if err != nil {
-		return errors.Wrap(err, "Failed to read token")
-	}
-
-	// Convert token to int
-	startObject, err := strconv.Atoi(t)
-	if err != nil {
-		return errors.Wrap(err, "Failed to convert start object to integer: "+t)
-	}
-
-	// Determine how many objects there are
-	t, err = this.readToken(r)
-	if err != nil {
-		return errors.Wrap(err, "Failed to read token")
-	}
-
-	// Convert token to int
-	numObject, err := strconv.Atoi(t)
-	if err != nil {
-		return errors.Wrap(err, "Failed to convert num object to integer: "+t)
-	}
-
-	// For all objects in xref, read object position, object generation, and status (free or new)
-	for i := startObject; i < startObject+numObject; i++ {
+	for {
+		// Next value will be the starting object id (usually 0, but not always) or the trailer
 		t, err = this.readToken(r)
 		if err != nil {
 			return errors.Wrap(err, "Failed to read token")
 		}
 
-		// Get object position as int
-		objPos, err := strconv.Atoi(t)
-		if err != nil {
-			return errors.Wrap(err, "Failed to convert object position to integer: "+t)
+		// Check for trailer
+		if t == "trailer" {
+			break
 		}
 
+		// Convert token to int
+		startObject, err := strconv.Atoi(t)
+		if err != nil {
+			return errors.Wrap(err, "Failed to convert start object to integer: "+t)
+		}
+
+		// Determine how many objects there are
 		t, err = this.readToken(r)
 		if err != nil {
 			return errors.Wrap(err, "Failed to read token")
 		}
 
-		// Get object generation as int
-		objGen, err := strconv.Atoi(t)
+		// Convert token to int
+		numObject, err := strconv.Atoi(t)
 		if err != nil {
-			return errors.Wrap(err, "Failed to convert object generation to integer: "+t)
+			return errors.Wrap(err, "Failed to convert num object to integer: "+t)
 		}
 
-		// Get object status (free or new)
-		objStatus, err := this.readToken(r)
-		if err != nil {
-			return errors.Wrap(err, "Failed to read token")
+		// For all objects in xref, read object position, object generation, and status (free or new)
+		for i := startObject; i < startObject+numObject; i++ {
+			t, err = this.readToken(r)
+			if err != nil {
+				return errors.Wrap(err, "Failed to read token")
+			}
+
+			// Get object position as int
+			objPos, err := strconv.Atoi(t)
+			if err != nil {
+				return errors.Wrap(err, "Failed to convert object position to integer: "+t)
+			}
+
+			t, err = this.readToken(r)
+			if err != nil {
+				return errors.Wrap(err, "Failed to read token")
+			}
+
+			// Get object generation as int
+			objGen, err := strconv.Atoi(t)
+			if err != nil {
+				return errors.Wrap(err, "Failed to convert object generation to integer: "+t)
+			}
+
+			// Get object status (free or new)
+			objStatus, err := this.readToken(r)
+			if err != nil {
+				return errors.Wrap(err, "Failed to read token")
+			}
+			if objStatus != "f" && objStatus != "n" {
+				return errors.New("Expected objStatus to be 'n' or 'f', got: " + objStatus)
+			}
+
+			// Append map[int]int
+			this.xref[i] = make(map[int]int, 1)
+
+			// Set object id, generation, and position
+			this.xref[i][objGen] = objPos
 		}
-		if objStatus != "f" && objStatus != "n" {
-			return errors.New("Expected objStatus to be 'n' or 'f', got: " + objStatus)
-		}
-
-		// Append map[int]int
-		this.xref[i] = make(map[int]int, 1)
-
-		// Set object id, generation, and position
-		this.xref[i][objGen] = objPos
-	}
-
-	// Next, parse trailer
-	t, err = this.readToken(r)
-	if err != nil {
-		return errors.Wrap(err, "Failed to read token")
-	}
-	if t != "trailer" {
-		return errors.New("Expected next token in xref to be 'trailer', got: " + t)
-	}
-
-	t, err = this.readToken(r)
-	if err != nil {
-		return errors.Wrap(err, "Failed to read token")
 	}
 
 	// Read trailer dictionary
+	t, err = this.readToken(r)
+	if err != nil {
+		return errors.Wrap(err, "Failed to read token")
+	}
+
 	trailer, err := this.readValue(r, t)
 	if err != nil {
 		return errors.Wrap(err, "Failed to read value for token: "+t)
