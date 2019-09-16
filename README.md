@@ -10,7 +10,7 @@ gofpdi allows you to import an existing PDF into a new PDF.  The following PDF g
 
 ## Acknowledgments
 This package’s code is derived from the [fpdi](https://github.com/Setasign/FPDI/tree/1.6.x-legacy) library created by [Jan Slabon](https://github.com/JanSlabon).
-[mrtsbt](https://github.com/mrtsbt) added support for reading a PDF from an `io.ReadSeeker` stream.
+[mrtsbt](https://github.com/mrtsbt) added support for reading a PDF from an `io.ReadSeeker` stream and also added support for using gofpdi concurrently.  [awesomeunleashed](https://github.com/awesomeunleashed) added support for reading PDFs that have split xref tables.
 
 ## Examples
 
