@@ -1154,11 +1154,13 @@ func (this *PdfReader) _getPageRotation(page *PdfValue) (*PdfValue, error) {
 
 func (this *PdfReader) read() error {
 	var err error
+
 	// Find xref position
 	err = this.findXref()
 	if err != nil {
 		return errors.Wrap(err, "Failed to find xref position")
 	}
+
 	// Parse xref table
 	err = this.readXref()
 	if err != nil {
