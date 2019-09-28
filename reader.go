@@ -7,9 +7,11 @@ import (
 	"fmt"
 	"github.com/pkg/errors"
 	"io"
+	"io/ioutil"
 	"math"
 	"os"
 	"strconv"
+	"github.com/davecgh/go-spew/spew"
 )
 
 type PdfReader struct {
@@ -672,6 +674,137 @@ func (this *PdfReader) readXref() error {
 		return errors.Wrap(err, "Failed to read token")
 	}
 	if t != "xref" {
+		// Maybe this is an XRef stream ...
+
+		v, err := this.readValue(r, t)
+		if err != nil {
+			return errors.Wrap(err, "Failed to read XRef stream")
+		}
+
+		if v.Type == PDF_TYPE_OBJDEC {
+			spew.Dump(v)
+
+			// Read next token
+			t, err = this.readToken(r)
+			if err != nil {
+				return errors.Wrap(err, "Failed to read token")
+			}
+
+			// Read actual object value
+			v, err := this.readValue(r, t)
+			if err != nil {
+				return errors.Wrap(err, "Failed to read value for token: "+t)
+			}
+
+			// If /Type is set, check to see if it is XRef
+			if _, ok := v.Dictionary["/Type"]; ok {
+				if v.Dictionary["/Type"].Token == "/XRef" {
+					// continue reading xref stream data now that it is confirmed that it is an xref stream
+
+					//result.Type = PDF_TYPE_STREAM
+
+					err = this.skipWhitespace(r)
+					if err != nil {
+						return errors.Wrap(err, "Failed to skip whitespace")
+					}
+
+					// Get stream length dictionary
+					lengthDict := v.Dictionary["/Length"]
+
+					// Get number of bytes of stream
+					length := lengthDict.Int
+
+					// If lengthDict is an object reference, resolve the object and set length
+					if lengthDict.Type == PDF_TYPE_OBJREF {
+						lengthDict, err = this.resolveObject(lengthDict)
+
+						if err != nil {
+							return errors.Wrap(err, "Failed to resolve length object of stream")
+						}
+
+						// Set length to resolved object value
+						length = lengthDict.Value.Int
+					}
+
+					t, err = this.readToken(r)
+					if err != nil {
+						return errors.Wrap(err, "Failed to read token")
+					}
+					if t != "stream" {
+						return errors.New("Expected next token to be: stream, got: " + t)
+					}
+
+					err = this.skipWhitespace(r)
+					if err != nil {
+						return errors.Wrap(err, "Failed to skip whitespace")
+					}
+
+					// Read length bytes
+					data := make([]byte, length)
+
+					// Cannot use reader.Read() because that may not read all the bytes
+					_, err := io.ReadFull(r, data)
+					if err != nil {
+						return errors.Wrap(err, "Failed to read bytes from buffer")
+					}
+
+					// Look for endstream token
+					t, err = this.readToken(r)
+					if err != nil {
+						return errors.Wrap(err, "Failed to read token")
+					}
+					if t != "endstream" {
+						return errors.New("Expected next token to be: endstream, got: " + t)
+					}
+
+					// Look for endobj token
+					t, err = this.readToken(r)
+					if err != nil {
+						return errors.Wrap(err, "Failed to read token")
+					}
+					if t != "endobj" {
+						return errors.New("Expected next token to be: endobj, got: " + t)
+					}
+
+					// Now decode zlib data
+					b := bytes.NewReader(data)
+
+					z, err := zlib.NewReader(b)
+					if err != nil {
+						panic(err)
+					}
+					defer z.Close()
+
+					p, err := ioutil.ReadAll(z)
+					if err != nil {
+						panic(err)
+					}
+
+					// Decode result with paeth algorithm
+					var result []byte
+					b = bytes.NewReader(p)
+					prevRow := make([]byte, 5)
+					for {
+						result = make([]byte, 5)
+						_, err := io.ReadFull(b, result)
+						if err != nil {
+							panic(err);
+						}
+
+						filterPaeth(result, prevRow, 5)
+						copy(prevRow, result)
+
+						newTmp := make([]byte, 4)
+						copy(newTmp, result[1:5])
+						fmt.Println(newTmp)
+					}
+					panic("to be implemented")
+				}
+			}
+
+			panic("x")
+		}
+
 		return errors.New("Expected xref to start with 'xref'.  Got: " + t)
 	}
 
