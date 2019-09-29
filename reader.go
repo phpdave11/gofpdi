@@ -4,14 +4,15 @@ import (
 	"bufio"
 	"bytes"
 	"compress/zlib"
+	"encoding/binary"
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/pkg/errors"
 	"io"
 	"io/ioutil"
 	"math"
 	"os"
 	"strconv"
-	"github.com/davecgh/go-spew/spew"
 )
 
 type PdfReader struct {
@@ -682,8 +683,6 @@ func (this *PdfReader) readXref() error {
 		}
 
 		if v.Type == PDF_TYPE_OBJDEC {
-			spew.Dump(v)
-
 			// Read next token
 			t, err = this.readToken(r)
 			if err != nil {
@@ -699,9 +698,24 @@ func (this *PdfReader) readXref() error {
 			// If /Type is set, check to see if it is XRef
 			if _, ok := v.Dictionary["/Type"]; ok {
 				if v.Dictionary["/Type"].Token == "/XRef" {
-					// continue reading xref stream data now that it is confirmed that it is an xref stream
+					// Continue reading xref stream data now that it is confirmed that it is an xref stream
 
-					//result.Type = PDF_TYPE_STREAM
+					index := make([]int, 2)
+
+					// If /Index is not set, this is an error
+					if _, ok := v.Dictionary["/Index"]; ok {
+						if len(v.Dictionary["/Index"].Array) < 2 {
+							return errors.Wrap(err, "Index array does not contain 2 elements")
+						}
+
+						index[0] = v.Dictionary["/Index"].Array[0].Int
+						index[1] = v.Dictionary["/Index"].Array[1].Int
+					} else {
+						return errors.Wrap(err, "Index array does not exist in xref stream")
+					}
+
+					startObject := index[0]
+					//numObject := index[1] - index[0]
 
 					err = this.skipWhitespace(r)
 					if err != nil {
@@ -780,6 +794,10 @@ func (this *PdfReader) readXref() error {
 						panic(err)
 					}
 
+					objPos := 0
+					objGen := 0
+					i := startObject
+
 					// Decode result with paeth algorithm
 					var result []byte
 					b = bytes.NewReader(p)
@@ -788,7 +806,11 @@ func (this *PdfReader) readXref() error {
 						result = make([]byte, 5)
 						_, err := io.ReadFull(b, result)
 						if err != nil {
-							panic(err);
+							if err == io.EOF {
+								break
+							} else {
+								panic(err)
+							}
 						}
 
 						filterPaeth(result, prevRow, 5)
@@ -797,6 +819,24 @@ func (this *PdfReader) readXref() error {
 						newTmp := make([]byte, 4)
 						copy(newTmp, result[1:5])
 						fmt.Println(newTmp)
+
+						if newTmp[0] == 1 {
+							spew.Dump(newTmp[1:3])
+
+							b := newTmp[1:3]
+							objPos = int(int16(binary.BigEndian.Uint16(b)))
+							objGen = int(newTmp[3])
+
+							// Append map[int]int
+							this.xref[i] = make(map[int]int, 1)
+
+							// Set object id, generation, and position
+							this.xref[i][objGen] = objPos
+
+							spew.Dump(this.xref)
+						}
+
+						i++
 					}
 					panic("to be implemented")
 				}
