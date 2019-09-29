@@ -714,6 +714,19 @@ func (this *PdfReader) readXref() error {
 						return errors.Wrap(err, "Index array does not exist in xref stream")
 					}
 
+					prevXref := 0
+
+					// Check for previous xref stream
+					if _, ok := v.Dictionary["/Prev"]; ok {
+						prevXref = v.Dictionary["/Prev"].Int
+					}
+
+					// Set root object
+					if _, ok := v.Dictionary["/Root"]; ok {
+						// Just set the whole dictionary with /Root key to keep compatibiltiy with existing code
+						this.trailer = v
+					}
+
 					startObject := index[0]
 					//numObject := index[1] - index[0]
 
@@ -816,16 +829,16 @@ func (this *PdfReader) readXref() error {
 						filterPaeth(result, prevRow, 5)
 						copy(prevRow, result)
 
-						newTmp := make([]byte, 4)
-						copy(newTmp, result[1:5])
-						fmt.Println(newTmp)
+						objectData := make([]byte, 4)
+						copy(objectData, result[1:5])
+						fmt.Println(objectData)
 
-						if newTmp[0] == 1 {
-							spew.Dump(newTmp[1:3])
+						if objectData[0] == 1 {
+							spew.Dump(objectData[1:3])
 
-							b := newTmp[1:3]
+							b := objectData[1:3]
 							objPos = int(int16(binary.BigEndian.Uint16(b)))
-							objGen = int(newTmp[3])
+							objGen = int(objectData[3])
 
 							// Append map[int]int
 							this.xref[i] = make(map[int]int, 1)
@@ -838,11 +851,16 @@ func (this *PdfReader) readXref() error {
 
 						i++
 					}
-					panic("to be implemented")
+
+					// Check for previous xref stream
+					if prevXref > 0 {
+						this.xrefPos = prevXref
+						return this.readXref()
+					}
 				}
 			}
 
-			panic("x")
+			return nil
 		}
 
 		return errors.New("Expected xref to start with 'xref'.  Got: " + t)
