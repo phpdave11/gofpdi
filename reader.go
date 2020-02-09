@@ -457,6 +457,10 @@ func (this *PdfReader) resolveObject(objSpec *PdfValue) (*PdfValue, error) {
 		// This is a reference, resolve it.
 		offset := this.xref[objSpec.Id][objSpec.Gen]
 
+		if _, ok := this.xref[objSpec.Id]; !ok {
+			return nil, errors.New(fmt.Sprintf("Object ID %d not found in xref", objSpec.Id))
+		}
+
 		// Save current file position
 		// This is needed if you want to resolve reference while you're reading another object.
 		// (e.g.: if you need to determine the length of a stream)
@@ -658,6 +662,8 @@ func (this *PdfReader) findXref() error {
 
 // Read and parse the xref table
 func (this *PdfReader) readXref() error {
+	fmt.Printf("Reading XREF...\n")
+
 	var err error
 
 	// Create new bufio.Reader
@@ -711,7 +717,10 @@ func (this *PdfReader) readXref() error {
 						index[0] = v.Dictionary["/Index"].Array[0].Int
 						index[1] = v.Dictionary["/Index"].Array[1].Int
 					} else {
-						return errors.Wrap(err, "Index array does not exist in xref stream")
+						index[0] = 0
+						//spew.Dump(v.Dictionary)
+						//panic("noooo")
+						//return errors.Wrap(err, "Index array does not exist in xref stream")
 					}
 
 					prevXref := 0
@@ -725,6 +734,17 @@ func (this *PdfReader) readXref() error {
 					if _, ok := v.Dictionary["/Root"]; ok {
 						// Just set the whole dictionary with /Root key to keep compatibiltiy with existing code
 						this.trailer = v
+
+						/*
+						rootObj, err := this.resolveObject(v.Dictionary["/Root"]);
+						if (err != nil) {
+							return errors.Wrap(err, "Could not resolve /Root object from xref stream")
+						}
+
+						this.trailer = rootObj
+                        */
+					} else {
+						panic("did not set root object")
 					}
 
 					startObject := index[0]
@@ -814,6 +834,7 @@ func (this *PdfReader) readXref() error {
 					// Decode result with paeth algorithm
 					var result []byte
 					b = bytes.NewReader(p)
+
 					prevRow := make([]byte, 5)
 					for {
 						result = make([]byte, 5)
@@ -831,13 +852,11 @@ func (this *PdfReader) readXref() error {
 
 						objectData := make([]byte, 4)
 						copy(objectData, result[1:5])
-						fmt.Println(objectData)
 
 						if objectData[0] == 1 {
-							spew.Dump(objectData[1:3])
-
 							b := objectData[1:3]
-							objPos = int(int16(binary.BigEndian.Uint16(b)))
+
+							objPos = int(binary.BigEndian.Uint16(b))
 							objGen = int(objectData[3])
 
 							// Append map[int]int
@@ -846,7 +865,7 @@ func (this *PdfReader) readXref() error {
 							// Set object id, generation, and position
 							this.xref[i][objGen] = objPos
 
-							spew.Dump(this.xref)
+							fmt.Printf("%d\t%d\n", i, objPos)
 						}
 
 						i++
@@ -854,8 +873,18 @@ func (this *PdfReader) readXref() error {
 
 					// Check for previous xref stream
 					if prevXref > 0 {
+						oldXref := this.xrefPos
+
+						// Set xrefPos to /Prev xref
 						this.xrefPos = prevXref
-						return this.readXref()
+
+						xrefErr := this.readXref()
+						if xrefErr != nil {
+							return errors.Wrap(xrefErr, "Failed to read prev xref")
+						}
+
+						// Set xref pos back
+						this.xrefPos = oldXref
 					}
 				}
 			}
@@ -974,6 +1003,7 @@ func (this *PdfReader) readRoot() error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to resolve root object")
 	}
+	//spew.Dump(this.catalog)
 
 	return nil
 }
