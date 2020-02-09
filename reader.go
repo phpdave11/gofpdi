@@ -1,12 +1,20 @@
 package gofpdi
 
+/*
+TO FIX:  ADD ObjStm parsing
+
+php > echo gzuncompress(file_get_contents('example_012a.pdf'));
+32 0 33 116 34 134 35 167 36 227 37 286 38 526 39 861 <</ColorSpace<</Cs6 33 0 R/Cs8 34 0 R>>/ExtGState<</GS1 35 0 R/GS2 36 0 R>>/Font<</TT1 39 0 R>>/ProcSet[/PDF/Text]>>[/ICCBased 27 0 R][/Separation/Black 33 0 R 28 0 R]<</OP false/OPM 1/SA false/SM 0.02/Type/ExtGState/op false>><</OP false/OPM 1/SA true/SM 0.02/Type/ExtGState/op false>><</Ascent 905/CIDSet 29 0 R/CapHeight 0/Descent -211/Flags 4/FontBBox[-665 -325 2000 1040]/FontFamily(Arial)/FontFile2 30 0 R/FontName/IAEPOF+ArialMT/FontStretch/Normal/FontWeight 400/ItalicAngle 0/StemV 88/Type/FontDescriptor/XHeight 539>><</BaseFont/IAEPOF+ArialMT/CIDSystemInfo<</Ordering(Identity)/Registry(Adobe)/Supplement 0>>/CIDToGIDMap/Identity/DW 1000/FontDescriptor 37 0 R/Subtype/CIDFontType2/Type/Font/W[3[278]36[667]38[722]40[667]47[556]51[667]53[722 667]68[556]70[500 556]72[556 278 556]76[222]79[222 833 556]82 83 556 85[333 500 278 556 500 722 500]92[500]]>><</BaseFont/IAEPOF+ArialMT/DescendantFonts[38 0 R]/Encoding/Identity-H/Subtype/Type0/ToUnicode 18 0 R/Type/Font>>
+php > 
+*/
+
 import (
 	"bufio"
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
 	"fmt"
-	"github.com/davecgh/go-spew/spew"
+	//"github.com/davecgh/go-spew/spew"
 	"github.com/pkg/errors"
 	"io"
 	"io/ioutil"
@@ -849,7 +857,7 @@ func (this *PdfReader) readXref() error {
 
 						filterPaeth(result, prevRow, 5)
 						copy(prevRow, result)
-
+fmt.Println(result)
 						objectData := make([]byte, 4)
 						copy(objectData, result[1:5])
 
