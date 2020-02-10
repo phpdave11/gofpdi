@@ -1,20 +1,11 @@
 package gofpdi
 
-/*
-TO FIX:  ADD ObjStm parsing
-
-php > echo gzuncompress(file_get_contents('example_012a.pdf'));
-32 0 33 116 34 134 35 167 36 227 37 286 38 526 39 861 <</ColorSpace<</Cs6 33 0 R/Cs8 34 0 R>>/ExtGState<</GS1 35 0 R/GS2 36 0 R>>/Font<</TT1 39 0 R>>/ProcSet[/PDF/Text]>>[/ICCBased 27 0 R][/Separation/Black 33 0 R 28 0 R]<</OP false/OPM 1/SA false/SM 0.02/Type/ExtGState/op false>><</OP false/OPM 1/SA true/SM 0.02/Type/ExtGState/op false>><</Ascent 905/CIDSet 29 0 R/CapHeight 0/Descent -211/Flags 4/FontBBox[-665 -325 2000 1040]/FontFamily(Arial)/FontFile2 30 0 R/FontName/IAEPOF+ArialMT/FontStretch/Normal/FontWeight 400/ItalicAngle 0/StemV 88/Type/FontDescriptor/XHeight 539>><</BaseFont/IAEPOF+ArialMT/CIDSystemInfo<</Ordering(Identity)/Registry(Adobe)/Supplement 0>>/CIDToGIDMap/Identity/DW 1000/FontDescriptor 37 0 R/Subtype/CIDFontType2/Type/Font/W[3[278]36[667]38[722]40[667]47[556]51[667]53[722 667]68[556]70[500 556]72[556 278 556]76[222]79[222 833 556]82 83 556 85[333 500 278 556 500 722 500]92[500]]>><</BaseFont/IAEPOF+ArialMT/DescendantFonts[38 0 R]/Encoding/Identity-H/Subtype/Type0/ToUnicode 18 0 R/Type/Font>>
-php > 
-*/
-
 import (
 	"bufio"
 	"bytes"
 	"compress/zlib"
 	"encoding/binary"
 	"fmt"
-	//"github.com/davecgh/go-spew/spew"
 	"github.com/pkg/errors"
 	"io"
 	"io/ioutil"
@@ -31,6 +22,7 @@ type PdfReader struct {
 	pages          []*PdfValue
 	xrefPos        int
 	xref           map[int]map[int]int
+	xrefStream     map[int][2]int
 	f              io.ReadSeeker
 	nBytes         int64
 	sourceFile     string
@@ -76,6 +68,7 @@ func NewPdfReader(filename string) (*PdfReader, error) {
 func (this *PdfReader) init() error {
 	this.availableBoxes = []string{"/MediaBox", "/CropBox", "/BleedBox", "/TrimBox", "/ArtBox"}
 	this.xref = make(map[int]map[int]int, 0)
+	this.xrefStream = make(map[int][2]int, 0)
 	err := this.read()
 	if err != nil {
 		return errors.Wrap(err, "Failed to read pdf")
@@ -454,6 +447,144 @@ func (this *PdfReader) readValue(r *bufio.Reader, t string) (*PdfValue, error) {
 	return result, nil
 }
 
+func (this *PdfReader) resolveCompressedObject(objSpec *PdfValue) (*PdfValue, error) {
+	var err error
+
+	// Make sure object reference exists in xrefStream
+	if _, ok := this.xrefStream[objSpec.Id]; !ok {
+		return nil, errors.New(fmt.Sprintf("Could not find object ID %d in xref stream."))
+	}
+
+	// Get object id and index
+	objectId := this.xrefStream[objSpec.Id][0]
+	objectIndex := this.xrefStream[objSpec.Id][1]
+
+	// Read compressed object
+	compressedObjSpec := &PdfValue{Type: PDF_TYPE_OBJREF, Id: objectId, Gen: 0}
+
+	// Resolve compressed object
+	compressedObj, err := this.resolveObject(compressedObjSpec)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to resolve compressed object")
+	}
+
+	// Verify object type is /ObjStm
+	if _, ok := compressedObj.Value.Dictionary["/Type"]; ok {
+		if compressedObj.Value.Dictionary["/Type"].Token != "/ObjStm" {
+			return nil, errors.New("Expected compressed object type to be /ObjStm")
+		}
+	} else {
+		return nil, errors.New("Could not determine compressed object type.")
+	}
+
+	// Get number of sub-objects in compressed object
+	n := compressedObj.Value.Dictionary["/N"].Int
+	if n <= 0 {
+		return nil, errors.New("No sub objects in compressed object")
+	}
+
+	// Get offset of first object
+	first := compressedObj.Value.Dictionary["/First"].Int
+
+	// Get length
+	//length := compressedObj.Value.Dictionary["/Length"].Int
+
+	// Check for filter
+	filter := ""
+	if _, ok := compressedObj.Value.Dictionary["/Filter"]; ok {
+		filter = compressedObj.Value.Dictionary["/Filter"].Token
+		if filter != "/FlateDecode" {
+			return nil, errors.New("Unsupported filter - expected /FlateDecode, got: " + filter)
+		}
+	}
+
+	if filter == "/FlateDecode" {
+		// Decompress if filter is /FlateDecode
+		// Uncompress zlib compressed data
+		var out bytes.Buffer
+		zlibReader, _ := zlib.NewReader(bytes.NewBuffer(compressedObj.Stream.Bytes))
+		defer zlibReader.Close()
+		io.Copy(&out, zlibReader)
+
+		// Set stream to uncompressed data
+		compressedObj.Stream.Bytes = out.Bytes()
+	}
+
+	// Get io.Reader for bytes
+	r := bufio.NewReader(bytes.NewBuffer(compressedObj.Stream.Bytes))
+
+	subObjId := 0
+	subObjPos := 0
+
+	// Read sub-object indeces and their positions within the (un)compressed object
+	for i := 0; i < n; i++ {
+		var token string
+		var _objidx int
+		var _objpos int
+
+		// Read first token (object index)
+		token, err = this.readToken(r)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to read token")
+		}
+
+		// Convert line (string) into int
+		_objidx, err = strconv.Atoi(token)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to convert token into integer: "+token)
+		}
+
+		// Read first token (object index)
+		token, err = this.readToken(r)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to read token")
+		}
+
+		// Convert line (string) into int
+		_objpos, err = strconv.Atoi(token)
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to convert token into integer: "+token)
+		}
+
+		if i == objectIndex {
+			subObjId = _objidx
+			subObjPos = _objpos
+		}
+	}
+
+	// Now create an io.ReadSeeker
+	rs := io.ReadSeeker(bytes.NewReader(compressedObj.Stream.Bytes))
+
+	// Determine where to seek to (sub-object position + /First)
+	seekTo := int64(subObjPos + first)
+
+	// Fast forward to the /First object
+	rs.Seek(seekTo, 0)
+
+	// Create a new io.Reader
+	r = bufio.NewReader(rs)
+
+	// Read token
+	token, err := this.readToken(r)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to read token")
+	}
+
+	// Read object
+	obj, err := this.readValue(r, token)
+	if err != nil {
+		return nil, errors.Wrap(err, "Failed to read value for token: "+token)
+	}
+
+	result := &PdfValue{}
+	result.Id = subObjId
+	result.Gen = 0
+	result.Type = PDF_TYPE_OBJECT
+	result.Value = obj
+
+	return result, nil
+}
+
 func (this *PdfReader) resolveObject(objSpec *PdfValue) (*PdfValue, error) {
 	var err error
 	var old_pos int64
@@ -466,7 +597,9 @@ func (this *PdfReader) resolveObject(objSpec *PdfValue) (*PdfValue, error) {
 		offset := this.xref[objSpec.Id][objSpec.Gen]
 
 		if _, ok := this.xref[objSpec.Id]; !ok {
-			return nil, errors.New(fmt.Sprintf("Object ID %d not found in xref", objSpec.Id))
+			// This may be a compressed object
+			return this.resolveCompressedObject(objSpec)
+			//return nil, errors.New(fmt.Sprintf("Object ID %d not found in xref", objSpec.Id))
 		}
 
 		// Save current file position
@@ -670,8 +803,6 @@ func (this *PdfReader) findXref() error {
 
 // Read and parse the xref table
 func (this *PdfReader) readXref() error {
-	fmt.Printf("Reading XREF...\n")
-
 	var err error
 
 	// Create new bufio.Reader
@@ -714,6 +845,11 @@ func (this *PdfReader) readXref() error {
 				if v.Dictionary["/Type"].Token == "/XRef" {
 					// Continue reading xref stream data now that it is confirmed that it is an xref stream
 
+					// Check to make sure field size is [1 2 1] - not yet tested with other field sizes
+					if v.Dictionary["/W"].Array[0].Int != 1 || v.Dictionary["/W"].Array[1].Int != 2 || v.Dictionary["/W"].Array[2].Int != 1 {
+						return errors.New("Unsupported field size in cross-reference stream dictionary - only tested with /W [1 2 1]")
+					}
+
 					index := make([]int, 2)
 
 					// If /Index is not set, this is an error
@@ -726,9 +862,6 @@ func (this *PdfReader) readXref() error {
 						index[1] = v.Dictionary["/Index"].Array[1].Int
 					} else {
 						index[0] = 0
-						//spew.Dump(v.Dictionary)
-						//panic("noooo")
-						//return errors.Wrap(err, "Index array does not exist in xref stream")
 					}
 
 					prevXref := 0
@@ -744,13 +877,13 @@ func (this *PdfReader) readXref() error {
 						this.trailer = v
 
 						/*
-						rootObj, err := this.resolveObject(v.Dictionary["/Root"]);
-						if (err != nil) {
-							return errors.Wrap(err, "Could not resolve /Root object from xref stream")
-						}
+							rootObj, err := this.resolveObject(v.Dictionary["/Root"]);
+							if (err != nil) {
+								return errors.Wrap(err, "Could not resolve /Root object from xref stream")
+							}
 
-						this.trailer = rootObj
-                        */
+							this.trailer = rootObj
+						*/
 					} else {
 						panic("did not set root object")
 					}
@@ -857,7 +990,7 @@ func (this *PdfReader) readXref() error {
 
 						filterPaeth(result, prevRow, 5)
 						copy(prevRow, result)
-fmt.Println(result)
+
 						objectData := make([]byte, 4)
 						copy(objectData, result[1:5])
 
@@ -872,8 +1005,14 @@ fmt.Println(result)
 
 							// Set object id, generation, and position
 							this.xref[i][objGen] = objPos
+						} else if objectData[0] == 2 {
+							// Compressed objects
+							b := objectData[1:3]
+							objId := int(binary.BigEndian.Uint16(b))
+							objIdx := int(objectData[3])
 
-							fmt.Printf("%d\t%d\n", i, objPos)
+							// object id (i) is located in StmObj (objId) at index (objIdx)
+							this.xrefStream[i] = [2]int{objId, objIdx}
 						}
 
 						i++
@@ -1011,7 +1150,6 @@ func (this *PdfReader) readRoot() error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to resolve root object")
 	}
-	//spew.Dump(this.catalog)
 
 	return nil
 }
