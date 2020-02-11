@@ -447,6 +447,7 @@ func (this *PdfReader) readValue(r *bufio.Reader, t string) (*PdfValue, error) {
 	return result, nil
 }
 
+// Resolve a compressed object (PDF 1.5)
 func (this *PdfReader) resolveCompressedObject(objSpec *PdfValue) (*PdfValue, error) {
 	var err error
 
@@ -558,7 +559,7 @@ func (this *PdfReader) resolveCompressedObject(objSpec *PdfValue) (*PdfValue, er
 	// Determine where to seek to (sub-object position + /First)
 	seekTo := int64(subObjPos + first)
 
-	// Fast forward to the /First object
+	// Fast forward to the object
 	rs.Seek(seekTo, 0)
 
 	// Create a new io.Reader
@@ -821,7 +822,6 @@ func (this *PdfReader) readXref() error {
 	}
 	if t != "xref" {
 		// Maybe this is an XRef stream ...
-
 		v, err := this.readValue(r, t)
 		if err != nil {
 			return errors.Wrap(err, "Failed to read XRef stream")
@@ -875,21 +875,11 @@ func (this *PdfReader) readXref() error {
 					if _, ok := v.Dictionary["/Root"]; ok {
 						// Just set the whole dictionary with /Root key to keep compatibiltiy with existing code
 						this.trailer = v
-
-						/*
-							rootObj, err := this.resolveObject(v.Dictionary["/Root"]);
-							if (err != nil) {
-								return errors.Wrap(err, "Could not resolve /Root object from xref stream")
-							}
-
-							this.trailer = rootObj
-						*/
 					} else {
 						panic("did not set root object")
 					}
 
 					startObject := index[0]
-					//numObject := index[1] - index[0]
 
 					err = this.skipWhitespace(r)
 					if err != nil {
@@ -995,6 +985,7 @@ func (this *PdfReader) readXref() error {
 						copy(objectData, result[1:5])
 
 						if objectData[0] == 1 {
+							// Regular objects
 							b := objectData[1:3]
 
 							objPos = int(binary.BigEndian.Uint16(b))
@@ -1020,18 +1011,14 @@ func (this *PdfReader) readXref() error {
 
 					// Check for previous xref stream
 					if prevXref > 0 {
-						oldXref := this.xrefPos
-
 						// Set xrefPos to /Prev xref
 						this.xrefPos = prevXref
 
+						// Read preivous xref
 						xrefErr := this.readXref()
 						if xrefErr != nil {
 							return errors.Wrap(xrefErr, "Failed to read prev xref")
 						}
-
-						// Set xref pos back
-						this.xrefPos = oldXref
 					}
 				}
 			}
