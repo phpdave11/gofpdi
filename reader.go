@@ -453,7 +453,7 @@ func (this *PdfReader) resolveCompressedObject(objSpec *PdfValue) (*PdfValue, er
 
 	// Make sure object reference exists in xrefStream
 	if _, ok := this.xrefStream[objSpec.Id]; !ok {
-		return nil, errors.New(fmt.Sprintf("Could not find object ID %d in xref stream."))
+		return nil, errors.New(fmt.Sprintf("Could not find object ID %d in xref stream or xref table."))
 	}
 
 	// Get object id and index
@@ -600,7 +600,6 @@ func (this *PdfReader) resolveObject(objSpec *PdfValue) (*PdfValue, error) {
 		if _, ok := this.xref[objSpec.Id]; !ok {
 			// This may be a compressed object
 			return this.resolveCompressedObject(objSpec)
-			//return nil, errors.New(fmt.Sprintf("Object ID %d not found in xref", objSpec.Id))
 		}
 
 		// Save current file position
