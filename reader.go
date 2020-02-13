@@ -894,7 +894,8 @@ func (this *PdfReader) readXref() error {
 						// Just set the whole dictionary with /Root key to keep compatibiltiy with existing code
 						this.trailer = v
 					} else {
-						return errors.New("Did not set root object")
+						// Don't return an error here.  The trailer could be in another XRef stream.
+						//return errors.New("Did not set root object")
 					}
 
 					startObject := index[0]
