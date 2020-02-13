@@ -453,7 +453,7 @@ func (this *PdfReader) resolveCompressedObject(objSpec *PdfValue) (*PdfValue, er
 
 	// Make sure object reference exists in xrefStream
 	if _, ok := this.xrefStream[objSpec.Id]; !ok {
-		return nil, errors.New(fmt.Sprintf("Could not find object ID %d in xref stream or xref table."))
+		return nil, errors.New(fmt.Sprintf("Could not find object ID %d in xref stream or xref table.", objSpec.Id))
 	}
 
 	// Get object id and index
@@ -844,6 +844,25 @@ func (this *PdfReader) readXref() error {
 				if v.Dictionary["/Type"].Token == "/XRef" {
 					// Continue reading xref stream data now that it is confirmed that it is an xref stream
 
+					// Check for /DecodeParms
+					paethDecode := false
+					if _, ok := v.Dictionary["/DecodeParms"]; ok {
+						columns := 0
+						predictor := 0
+
+						if _, ok2 := v.Dictionary["/DecodeParms"].Dictionary["/Columns"]; ok2 {
+							columns = v.Dictionary["/DecodeParms"].Dictionary["/Columns"].Int
+						}
+						if _, ok2 := v.Dictionary["/DecodeParms"].Dictionary["/Predictor"]; ok2 {
+							predictor = v.Dictionary["/DecodeParms"].Dictionary["/Predictor"].Int
+						}
+
+						if columns != 4 || predictor != 12 {
+							return errors.New("Unsupported /DecodeParms - only tested with /Columns 4 /Predictor 12")
+						}
+						paethDecode = true
+					}
+
 					// Check to make sure field size is [1 2 1] - not yet tested with other field sizes
 					if v.Dictionary["/W"].Array[0].Int != 1 || v.Dictionary["/W"].Array[1].Int != 2 || v.Dictionary["/W"].Array[2].Int != 1 {
 						return errors.New("Unsupported field size in cross-reference stream dictionary - only tested with /W [1 2 1]")
@@ -875,7 +894,7 @@ func (this *PdfReader) readXref() error {
 						// Just set the whole dictionary with /Root key to keep compatibiltiy with existing code
 						this.trailer = v
 					} else {
-						panic("did not set root object")
+						return errors.New("Did not set root object")
 					}
 
 					startObject := index[0]
@@ -948,13 +967,13 @@ func (this *PdfReader) readXref() error {
 
 					z, err := zlib.NewReader(b)
 					if err != nil {
-						panic(err)
+						return errors.Wrap(err, "zlib.NewReader error")
 					}
 					defer z.Close()
 
 					p, err := ioutil.ReadAll(z)
 					if err != nil {
-						panic(err)
+						return errors.Wrap(err, "ioutil.ReadAll error")
 					}
 
 					objPos := 0
@@ -965,23 +984,34 @@ func (this *PdfReader) readXref() error {
 					var result []byte
 					b = bytes.NewReader(p)
 
-					prevRow := make([]byte, 5)
+					fieldSize := 4
+					if paethDecode {
+						fieldSize++
+					}
+
+					prevRow := make([]byte, fieldSize)
 					for {
-						result = make([]byte, 5)
+						result = make([]byte, fieldSize)
 						_, err := io.ReadFull(b, result)
 						if err != nil {
 							if err == io.EOF {
 								break
 							} else {
-								panic(err)
+								return errors.Wrap(err, "io.ReadFull error")
 							}
 						}
 
-						filterPaeth(result, prevRow, 5)
-						copy(prevRow, result)
+						if paethDecode {
+							filterPaeth(result, prevRow, fieldSize)
+							copy(prevRow, result)
+						}
 
 						objectData := make([]byte, 4)
-						copy(objectData, result[1:5])
+						if paethDecode {
+							copy(objectData, result[1:5])
+						} else {
+							copy(objectData, result[0:4])
+						}
 
 						if objectData[0] == 1 {
 							// Regular objects
