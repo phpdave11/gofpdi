@@ -864,8 +864,11 @@ func (this *PdfReader) readXref() error {
 					}
 
 					// Check to make sure field size is [1 2 1] - not yet tested with other field sizes
-					if v.Dictionary["/W"].Array[0].Int != 1 || v.Dictionary["/W"].Array[1].Int != 2 || v.Dictionary["/W"].Array[2].Int != 1 {
-						return errors.New("Unsupported field size in cross-reference stream dictionary - only tested with /W [1 2 1]")
+					if v.Dictionary["/W"].Array[0].Int != 1 || v.Dictionary["/W"].Array[1].Int > 4 || v.Dictionary["/W"].Array[2].Int != 1 {
+						return errors.New(fmt.Sprintf("Unsupported field sizes in cross-reference stream dictionary: /W [%d %d %d]",
+							v.Dictionary["/W"].Array[0].Int,
+							v.Dictionary["/W"].Array[1].Int,
+							v.Dictionary["/W"].Array[2].Int))
 					}
 
 					index := make([]int, 2)
@@ -985,7 +988,11 @@ func (this *PdfReader) readXref() error {
 					var result []byte
 					b = bytes.NewReader(p)
 
-					fieldSize := 4
+					firstFieldSize := v.Dictionary["/W"].Array[0].Int
+					middleFieldSize := v.Dictionary["/W"].Array[1].Int
+					lastFieldSize := v.Dictionary["/W"].Array[2].Int
+
+					fieldSize := firstFieldSize + middleFieldSize + lastFieldSize
 					if paethDecode {
 						fieldSize++
 					}
@@ -1007,19 +1014,20 @@ func (this *PdfReader) readXref() error {
 							copy(prevRow, result)
 						}
 
-						objectData := make([]byte, 4)
+						objectData := make([]byte, fieldSize)
 						if paethDecode {
-							copy(objectData, result[1:5])
+							copy(objectData, result[1:fieldSize])
 						} else {
-							copy(objectData, result[0:4])
+							copy(objectData, result[0:fieldSize])
 						}
 
 						if objectData[0] == 1 {
 							// Regular objects
-							b := objectData[1:3]
+							b := make([]byte, 4)
+							copy(b[4-middleFieldSize:], objectData[1:1+middleFieldSize])
 
-							objPos = int(binary.BigEndian.Uint16(b))
-							objGen = int(objectData[3])
+							objPos = int(binary.BigEndian.Uint32(b))
+							objGen = int(objectData[firstFieldSize+middleFieldSize])
 
 							// Append map[int]int
 							this.xref[i] = make(map[int]int, 1)
@@ -1028,9 +1036,11 @@ func (this *PdfReader) readXref() error {
 							this.xref[i][objGen] = objPos
 						} else if objectData[0] == 2 {
 							// Compressed objects
-							b := objectData[1:3]
-							objId := int(binary.BigEndian.Uint16(b))
-							objIdx := int(objectData[3])
+							b := make([]byte, 4)
+							copy(b[4-middleFieldSize:], objectData[1:1+middleFieldSize])
+
+							objId := int(binary.BigEndian.Uint32(b))
+							objIdx := int(objectData[firstFieldSize+middleFieldSize])
 
 							// object id (i) is located in StmObj (objId) at index (objIdx)
 							this.xrefStream[i] = [2]int{objId, objIdx}
