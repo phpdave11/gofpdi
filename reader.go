@@ -26,6 +26,8 @@ type PdfReader struct {
 	f              io.ReadSeeker
 	nBytes         int64
 	sourceFile     string
+	curPage        int
+	alreadyRead    bool
 }
 
 func NewPdfReaderFromStream(rs io.ReadSeeker) (*PdfReader, error) {
@@ -1181,6 +1183,40 @@ func (this *PdfReader) readRoot() error {
 	return nil
 }
 
+// Read kids (pages inside a page tree)
+func (this *PdfReader) readKids(kids *PdfValue, r int) error {
+	// Loop through pages and add to result
+	for i := 0; i < len(kids.Array); i++ {
+		page, err := this.resolveObject(kids.Array[i])
+		if err != nil {
+			return errors.Wrap(err, "Failed to resolve page/pages object")
+		}
+
+		objType := page.Value.Dictionary["/Type"].Token
+		if objType == "/Page" {
+			// Set page and increment curPage
+			this.pages[this.curPage] = page
+			this.curPage++
+		} else if objType == "/Pages" {
+			// Resolve kids
+			subKids, err := this.resolveObject(page.Value.Dictionary["/Kids"])
+			if err != nil {
+				return errors.Wrap(err, "Failed to resolve kids")
+			}
+
+			// Recurse into page tree
+			err = this.readKids(subKids, r+1)
+			if err != nil {
+				return errors.Wrap(err, "Failed to read kids")
+			}
+		} else {
+			return errors.Wrap(err, fmt.Sprintf("Unknown object type '%s'.  Expected: /Pages or /Page", objType))
+		}
+	}
+
+	return nil
+}
+
 // Read all pages in PDF
 func (this *PdfReader) readPages() error {
 	var err error
@@ -1197,18 +1233,19 @@ func (this *PdfReader) readPages() error {
 		return errors.Wrap(err, "Failed to resolve kids object")
 	}
 
+	// Get number of pages
+	pageCount, err := this.resolveObject(pagesDict.Value.Dictionary["/Count"])
+	if err != nil {
+		return errors.Wrap(err, "Failed to get page count")
+	}
+
 	// Allocate pages
-	this.pages = make([]*PdfValue, len(kids.Array))
+	this.pages = make([]*PdfValue, pageCount.Int)
 
-	// Loop through pages and add to result
-	for i := 0; i < len(kids.Array); i++ {
-		page, err := this.resolveObject(kids.Array[i])
-		if err != nil {
-			return errors.Wrap(err, "Failed to resolve kid object")
-		}
-
-		// Set page
-		this.pages[i] = page
+	// Read kids
+	err = this.readKids(kids, 0)
+	if err != nil {
+		return errors.Wrap(err, "Failed to read kids")
 	}
 
 	return nil
@@ -1547,30 +1584,36 @@ func (this *PdfReader) _getPageRotation(page *PdfValue) (*PdfValue, error) {
 }
 
 func (this *PdfReader) read() error {
-	var err error
+	// Only run once
+	if !this.alreadyRead {
+		var err error
 
-	// Find xref position
-	err = this.findXref()
-	if err != nil {
-		return errors.Wrap(err, "Failed to find xref position")
-	}
+		// Find xref position
+		err = this.findXref()
+		if err != nil {
+			return errors.Wrap(err, "Failed to find xref position")
+		}
 
-	// Parse xref table
-	err = this.readXref()
-	if err != nil {
-		return errors.Wrap(err, "Failed to read xref table")
-	}
+		// Parse xref table
+		err = this.readXref()
+		if err != nil {
+			return errors.Wrap(err, "Failed to read xref table")
+		}
 
-	// Read catalog
-	err = this.readRoot()
-	if err != nil {
-		return errors.Wrap(err, "Failed to read root")
-	}
+		// Read catalog
+		err = this.readRoot()
+		if err != nil {
+			return errors.Wrap(err, "Failed to read root")
+		}
 
-	// Read pages
-	err = this.readPages()
-	if err != nil {
-		return errors.Wrap(err, "Failed to to read pages")
+		// Read pages
+		err = this.readPages()
+		if err != nil {
+			return errors.Wrap(err, "Failed to to read pages")
+		}
+
+		// Now that this has been read, do not read again
+		this.alreadyRead = true
 	}
 
 	return nil
