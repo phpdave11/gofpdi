@@ -860,19 +860,21 @@ func (this *PdfReader) readXref() error {
 							predictor = v.Dictionary["/DecodeParms"].Dictionary["/Predictor"].Int
 						}
 
-						if columns != 4 || predictor != 12 {
-							return errors.New("Unsupported /DecodeParms - only tested with /Columns 4 /Predictor 12")
+						if columns > 4 || predictor > 12 {
+							return errors.New("Unsupported /DecodeParms - only tested with /Columns <= 4 and /Predictor <= 12")
 						}
 						paethDecode = true
 					}
 
-					// Check to make sure field size is [1 2 1] - not yet tested with other field sizes
-					if v.Dictionary["/W"].Array[0].Int != 1 || v.Dictionary["/W"].Array[1].Int > 4 || v.Dictionary["/W"].Array[2].Int != 1 {
-						return errors.New(fmt.Sprintf("Unsupported field sizes in cross-reference stream dictionary: /W [%d %d %d]",
-							v.Dictionary["/W"].Array[0].Int,
-							v.Dictionary["/W"].Array[1].Int,
-							v.Dictionary["/W"].Array[2].Int))
-					}
+					/*
+						// Check to make sure field size is [1 2 1] - not yet tested with other field sizes
+						if v.Dictionary["/W"].Array[0].Int != 1 || v.Dictionary["/W"].Array[1].Int > 4 || v.Dictionary["/W"].Array[2].Int != 1 {
+							return errors.New(fmt.Sprintf("Unsupported field sizes in cross-reference stream dictionary: /W [%d %d %d]",
+								v.Dictionary["/W"].Array[0].Int,
+								v.Dictionary["/W"].Array[1].Int,
+								v.Dictionary["/W"].Array[2].Int))
+						}
+					*/
 
 					index := make([]int, 2)
 
