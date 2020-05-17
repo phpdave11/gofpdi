@@ -108,6 +108,16 @@ func (this *Importer) SetSourceStream(rs *io.ReadSeeker) {
 	}
 }
 
+func (this *Importer) GetNumPages() int {
+	result, err := this.GetReader().getNumPages()
+
+	if err != nil {
+		panic(err)
+	}
+
+	return result
+}
+
 func (this *Importer) GetPageSizes() map[int]map[string]map[string]float64 {
 	result, err := this.GetReader().getAllPageBoxes(1.0)
 

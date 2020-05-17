@@ -28,6 +28,7 @@ type PdfReader struct {
 	sourceFile     string
 	curPage        int
 	alreadyRead    bool
+	pageCount      int
 }
 
 func NewPdfReaderFromStream(rs io.ReadSeeker) (*PdfReader, error) {
@@ -1238,6 +1239,7 @@ func (this *PdfReader) readPages() error {
 	if err != nil {
 		return errors.Wrap(err, "Failed to get page count")
 	}
+	this.pageCount = pageCount.Int
 
 	// Allocate pages
 	this.pages = make([]*PdfValue, pageCount.Int)
@@ -1430,6 +1432,14 @@ func (this *PdfReader) rebuildContentStream(content *PdfValue) ([]byte, error) {
 	}
 
 	return stream, nil
+}
+
+func (this *PdfReader) getNumPages() (int, error) {
+	if this.pageCount == 0 {
+		return 0, errors.New("Page count is 0")
+	}
+
+	return this.pageCount, nil
 }
 
 func (this *PdfReader) getAllPageBoxes(k float64) (map[int]map[string]map[string]float64, error) {
