@@ -7,9 +7,10 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"github.com/pkg/errors"
 	"math"
 	"os"
+
+	"github.com/pkg/errors"
 )
 
 type PdfWriter struct {
@@ -227,7 +228,7 @@ func (this *PdfWriter) endObj() {
 
 func (this *PdfWriter) shaOfInt(i int) string {
 	hasher := sha1.New()
-	hasher.Write([]byte(fmt.Sprintf("%s-%s", i, this.r.sourceFile)))
+	hasher.Write([]byte(fmt.Sprintf("%d-%s", i, this.r.sourceFile)))
 	sha := hex.EncodeToString(hasher.Sum(nil))
 	return sha
 }
@@ -323,9 +324,9 @@ func (this *PdfWriter) writeValue(value *PdfValue) {
 
 	case PDF_TYPE_BOOLEAN:
 		if value.Bool {
-			this.straightOut("true")
+			this.straightOut("true ")
 		} else {
-			this.straightOut("false")
+			this.straightOut("false ")
 		}
 		break
 
