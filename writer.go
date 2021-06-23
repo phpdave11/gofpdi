@@ -7,9 +7,10 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"github.com/pkg/errors"
 	"math"
 	"os"
+
+	"github.com/pkg/errors"
 )
 
 type PdfWriter struct {

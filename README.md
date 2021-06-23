@@ -244,3 +244,10 @@ Generated PDF:
 Screenshot of PDF:
 
 ![example.jpg](https://user-images.githubusercontent.com/9421180/62728726-18b87500-b9e2-11e9-885c-7c68b7ac6222.jpg)
+
+
+------------
+
+# Change log
+- Added ASCII85Decode to support importing / decoding of Fedex international labels that was not supported by this library
+

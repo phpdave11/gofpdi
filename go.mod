@@ -1,5 +1,5 @@
-module github.com/phpdave11/gofpdi
+module github.com/happyreturns/gofpdi
 
-go 1.12
+go 1.16
 
-require github.com/pkg/errors v0.8.1
+require github.com/pkg/errors v0.9.1
