@@ -157,6 +157,34 @@ func (this *Importer) ImportPage(pageno int, box string) int {
 	return tplN
 }
 
+func (this *Importer) ImportPageWithError(pageno int, box string) (int, error) {
+	// If page has already been imported, return existing tplN
+	pageNameNumber := fmt.Sprintf("%s-%04d", this.sourceFile, pageno)
+	if _, ok := this.importedPages[pageNameNumber]; ok {
+		return this.importedPages[pageNameNumber]
+	}
+
+	res, err := this.GetWriter().ImportPage(this.GetReader(), pageno, box)
+	if err != nil {
+		return 0, err
+	}
+
+	// Get current template id
+	tplN := this.tplN
+
+	// Set tpl info
+	this.tplMap[tplN] = &TplInfo{SourceFile: this.sourceFile, TemplateId: res, Writer: this.GetWriter()}
+
+	// Increment template id
+	this.tplN++
+
+	// Cache imported page tplN
+	this.importedPages[pageNameNumber] = tplN
+
+	return tplN
+}
+
+
 func (this *Importer) SetNextObjectID(objId int) {
 	this.GetWriter().SetNextObjectID(objId)
 }
