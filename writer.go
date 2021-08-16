@@ -323,9 +323,9 @@ func (this *PdfWriter) writeValue(value *PdfValue) {
 
 	case PDF_TYPE_BOOLEAN:
 		if value.Bool {
-			this.straightOut("true")
+			this.straightOut("true ")
 		} else {
-			this.straightOut("false")
+			this.straightOut("false ")
 		}
 		break
 
