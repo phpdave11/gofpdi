@@ -669,7 +669,7 @@ func (this *PdfReader) resolveObject(objSpec *PdfValue) (*PdfValue, error) {
 			result.Type = PDF_TYPE_STREAM
 
 			// we just want to skip until after first CRLF
-			err = this.skip(r, getWhitespaceBytes())
+			err = this.skip(r, getNewLineBytes())
 			if err != nil {
 				return nil, errors.Wrap(err, "Failed to skip whitespace")
 			}
