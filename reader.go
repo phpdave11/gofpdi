@@ -125,8 +125,8 @@ func (this *PdfReader) skipComments(r *bufio.Reader) error {
 	return nil
 }
 
-// Advance reader so that whitespace is ignored
-func (this *PdfReader) skipWhitespace(r *bufio.Reader) error {
+// Advance reader so that skipBytes are ignored
+func (this *PdfReader) skip(r *bufio.Reader, skipBytes []byte) error {
 	var err error
 	var b byte
 
@@ -139,7 +139,7 @@ func (this *PdfReader) skipWhitespace(r *bufio.Reader) error {
 			return errors.Wrap(err, "Failed to read byte")
 		}
 
-		if b == ' ' || b == '\n' || b == '\r' || b == '\t' {
+		if bytes.IndexByte(skipBytes, b) > -1 {
 			continue
 		} else {
 			r.UnreadByte()
@@ -154,6 +154,7 @@ func (this *PdfReader) skipWhitespace(r *bufio.Reader) error {
 func (this *PdfReader) readToken(r *bufio.Reader) (string, error) {
 	var err error
 
+	var buffer bytes.Buffer
 	// If there is a token available on the stack, pop it out and return it.
 	if len(this.stack) > 0 {
 		var popped string
@@ -161,7 +162,8 @@ func (this *PdfReader) readToken(r *bufio.Reader) (string, error) {
 		return popped, nil
 	}
 
-	err = this.skipWhitespace(r)
+	whitespace := getWhitespaceBytes()
+	err = this.skip(r, whitespace)
 	if err != nil {
 		return "", errors.Wrap(err, "Failed to skip whitespace")
 	}
@@ -201,9 +203,7 @@ func (this *PdfReader) readToken(r *bufio.Reader) (string, error) {
 		return this.readToken(r)
 
 	default:
-		// FIXME this may not be performant to create new strings for each byte
-		// Is it probably better to create a buffer and then convert to a string at the end.
-		str := string(b)
+		buffer.WriteByte(b)
 
 	loop:
 		for {
@@ -216,10 +216,10 @@ func (this *PdfReader) readToken(r *bufio.Reader) (string, error) {
 				r.UnreadByte()
 				break loop
 			default:
-				str += string(b)
+				buffer.WriteByte(b)
 			}
 		}
-		return str, nil
+		return buffer.String(), nil
 	}
 
 	return "", nil
@@ -668,7 +668,8 @@ func (this *PdfReader) resolveObject(objSpec *PdfValue) (*PdfValue, error) {
 		if token == "stream" {
 			result.Type = PDF_TYPE_STREAM
 
-			err = this.skipWhitespace(r)
+			// we just want to skip until after first CRLF
+			err = this.skip(r, getWhitespaceBytes())
 			if err != nil {
 				return nil, errors.Wrap(err, "Failed to skip whitespace")
 			}
@@ -808,6 +809,7 @@ func (this *PdfReader) findXref() error {
 func (this *PdfReader) readXref() error {
 	var err error
 
+	whitespace := getWhitespaceBytes()
 	// Create new bufio.Reader
 	r := bufio.NewReader(this.f)
 
@@ -908,7 +910,7 @@ func (this *PdfReader) readXref() error {
 
 					startObject := index[0]
 
-					err = this.skipWhitespace(r)
+					err = this.skip(r, whitespace)
 					if err != nil {
 						return errors.Wrap(err, "Failed to skip whitespace")
 					}
@@ -939,7 +941,7 @@ func (this *PdfReader) readXref() error {
 						return errors.New("Expected next token to be: stream, got: " + t)
 					}
 
-					err = this.skipWhitespace(r)
+					err = this.skip(r, whitespace)
 					if err != nil {
 						return errors.Wrap(err, "Failed to skip whitespace")
 					}
@@ -1629,4 +1631,12 @@ func (this *PdfReader) read() error {
 	}
 
 	return nil
+}
+
+func getWhitespaceBytes() []byte {
+	return []byte{0x20, 0x0A, 0x0C, 0x0D, 0x09, 0x00}
+}
+
+func getNewLineBytes() []byte {
+	return []byte{'\r', '\n'}
 }
