@@ -170,8 +170,7 @@ func (this *PdfReader) readToken(r *bufio.Reader) (string, error) {
 		return popped, nil
 	}
 
-	whitespace := getWhitespaceBytes()
-	err = this.skip(r, whitespace)
+	err = this.skip(r, whitespaceBytes())
 	if err != nil {
 		return "", errors.Wrap(err, "Failed to skip whitespace")
 	}
@@ -677,7 +676,7 @@ func (this *PdfReader) resolveObject(objSpec *PdfValue) (*PdfValue, error) {
 			result.Type = PDF_TYPE_STREAM
 
 			// we just want to skip until after first CRLF
-			err = this.skip(r, getNewLineBytes())
+			err = this.skip(r, newLineBytes())
 			if err != nil {
 				return nil, errors.Wrap(err, "Failed to skip whitespace")
 			}
@@ -817,7 +816,7 @@ func (this *PdfReader) findXref() error {
 func (this *PdfReader) readXref() error {
 	var err error
 
-	whitespace := getWhitespaceBytes()
+	whitespace := whitespaceBytes()
 	// Create new bufio.Reader
 	r := bufio.NewReader(this.f)
 
@@ -1641,10 +1640,10 @@ func (this *PdfReader) read() error {
 	return nil
 }
 
-func getWhitespaceBytes() []byte {
+func whitespaceBytes() []byte {
 	return []byte{0x20, 0x0A, 0x0C, 0x0D, 0x09, 0x00}
 }
 
-func getNewLineBytes() []byte {
+func newLineBytes() []byte {
 	return []byte{'\r', '\n'}
 }
