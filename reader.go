@@ -1367,6 +1367,23 @@ func (this *PdfReader) getContent(pageno int) (string, error) {
 		}
 
 		for i := 0; i < len(contents); i++ {
+			// If the pdf type is an object, check if its value is an array
+			// The actual content (Stream) is most likely here (This is the case for Canadapost shipping labels)
+			if contents[i].Type == PDF_TYPE_OBJECT {
+				if contents[i].Value != nil {
+					if contents[i].Value.Type == PDF_TYPE_ARRAY {
+						arrayContents, err := this.getPageContent(contents[i].Value)
+						if err != nil {
+							return "", errors.Wrap(err, "Failed to get page content from content array")
+						}
+						contents = append(contents, arrayContents...)
+					}
+				}
+			}
+			// If there is no stream, it will panic when trying to rebuild content stream
+			if contents[i].Stream == nil {
+				continue
+			}
 			// Decode content if one or more /Filter is specified.
 			// Most common filter is FlateDecode which can be uncompressed with zlib
 			tmpBuffer, err := this.rebuildContentStream(contents[i])
