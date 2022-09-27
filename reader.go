@@ -106,6 +106,9 @@ func (this *PdfReader) skipComments(r *bufio.Reader) error {
 	for {
 		b, err = r.ReadByte()
 		if err != nil {
+			if err == io.EOF {
+				break
+			}
 			return errors.Wrap(err, "Failed to ReadByte while skipping comments")
 		}
 
@@ -186,6 +189,9 @@ func (this *PdfReader) readToken(r *bufio.Reader) (string, error) {
 		// Determine the appropriate case and return the token.
 		nb, err := r.ReadByte()
 		if err != nil {
+			if err == io.EOF {
+				return string(b), nil
+			}
 			return "", errors.Wrap(err, "Failed to read byte")
 		}
 		if nb == b {
@@ -211,6 +217,9 @@ func (this *PdfReader) readToken(r *bufio.Reader) (string, error) {
 		for {
 			b, err := r.ReadByte()
 			if err != nil {
+				if err == io.EOF {
+					break loop
+				}
 				return "", errors.Wrap(err, "Failed to read byte")
 			}
 			switch b {
@@ -223,8 +232,6 @@ func (this *PdfReader) readToken(r *bufio.Reader) (string, error) {
 		}
 		return str, nil
 	}
-
-	return "", nil
 }
 
 // Read a value based on a token
@@ -791,6 +798,11 @@ func (this *PdfReader) findXref() error {
 			// Successfully read the xref position
 			this.xrefPos = result
 			break
+		}
+
+		// (token, err) == ("", nil) indicates EOF reached before finding "startxref"
+		if token == "" {
+			return errors.New("Failed to find startxref token")
 		}
 	}
 
