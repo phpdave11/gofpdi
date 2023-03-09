@@ -90,7 +90,7 @@ func (this *Importer) SetSourceStream(rs *io.ReadSeeker) {
 	this.sourceFile = fmt.Sprintf("%v", rs)
 
 	if _, ok := this.readers[this.sourceFile]; !ok {
-		reader, err := NewPdfReaderFromStream(*rs)
+		reader, err := NewPdfReaderFromStream(this.sourceFile, *rs)
 		if err != nil {
 			panic(err)
 		}
