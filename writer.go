@@ -122,7 +122,7 @@ func (pw *PdfWriter) ImportPage(reader *PdfReader, pageno int, boxName string) (
 		return -1, errors.Wrap(err, "Failed to get page boxes")
 	}
 
-	// If requested box name does not exist for this page, use an alternate box
+	// If requested box name does not exist for pw page, use an alternate box
 	if _, ok := pageBoxes[boxName]; !ok {
 		if boxName == "/BleedBox" || boxName == "/TrimBox" || boxName == "ArtBox" {
 			boxName = "/CropBox"
@@ -224,7 +224,7 @@ func (pw *PdfWriter) endObj() {
 
 func (pw *PdfWriter) shaOfInt(i int) string {
 	hasher := sha1.New()
-	hasher.Write([]byte(fmt.Sprintf("%v-%v-%v", pw.tpl_id_offset, i, pw.r.sourceFile)))
+	hasher.Write([]byte(fmt.Sprintf("%d-%s", i, pw.r.sourceFile)))
 	sha := hex.EncodeToString(hasher.Sum(nil))
 	return sha
 }
@@ -438,11 +438,11 @@ func (pw *PdfWriter) putImportedObjects(reader *PdfReader) error {
 	var nObj *PdfValue
 
 	// obj_stack will have new items added to it in the inner loop, so do another loop to check for extras
-	// TODO make the order of this the same every time
+	// TODO make the order of pw the same every time
 	for {
 		atLeastOne := false
 
-		// FIXME:  How to determine number of objects before this loop?
+		// FIXME:  How to determine number of objects before pw loop?
 		for i := 0; i < 9999; i++ {
 			k := i
 			v := pw.obj_stack[i]
@@ -482,7 +482,7 @@ func (pw *PdfWriter) putImportedObjects(reader *PdfReader) error {
 }
 
 // Get the calculated size of a template
-// If one size is given, this method calculates the other one
+// If one size is given, pw method calculates the other one
 func (pw *PdfWriter) getTemplateSize(tplid int, _w float64, _h float64) map[string]float64 {
 	result := make(map[string]float64, 2)
 

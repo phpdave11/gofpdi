@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math"
 	"os"
 	"strconv"
@@ -177,11 +176,11 @@ func (pr *PdfReader) readToken(r *bufio.Reader) (string, error) {
 
 	switch b {
 	case '[', ']', '(', ')':
-		// This is either an array or literal string delimeter, return it.
+		// pr is either an array or literal string delimeter, return it.
 		return string(b), nil
 
 	case '<', '>':
-		// This could either be a hex string or a dictionary delimiter.
+		// pr could either be a hex string or a dictionary delimiter.
 		// Determine the appropriate case and return the token.
 		nb, err := r.ReadByte()
 		if err != nil {
@@ -237,7 +236,7 @@ func (pr *PdfReader) readValue(r *bufio.Reader, t string) (*PdfValue, error) {
 
 	switch t {
 	case "<":
-		// This is a hex string
+		// pr is a hex string
 
 		// Read bytes until '>' is found
 		var s string
@@ -257,9 +256,9 @@ func (pr *PdfReader) readValue(r *bufio.Reader, t string) (*PdfValue, error) {
 		result.String = s
 
 	case "<<":
-		// This is a dictionary
+		// pr is a dictionary
 
-		// Recurse into this function until we reach the end of the dictionary.
+		// Recurse into pr function until we reach the end of the dictionary.
 		for {
 			key, err := pr.readToken(r)
 			if err != nil {
@@ -303,11 +302,11 @@ func (pr *PdfReader) readValue(r *bufio.Reader, t string) (*PdfValue, error) {
 		return result, nil
 
 	case "[":
-		// This is an array
+		// pr is an array
 
 		tmpResult := make([]*PdfValue, 0)
 
-		// Recurse into this function until we reach the end of the array
+		// Recurse into pr function until we reach the end of the array
 		for {
 			key, err := pr.readToken(r)
 			if err != nil {
@@ -337,7 +336,7 @@ func (pr *PdfReader) readValue(r *bufio.Reader, t string) (*PdfValue, error) {
 		result.Array = tmpResult
 
 	case "(":
-		// This is a string
+		// pr is a string
 
 		openBrackets := 1
 
@@ -395,7 +394,7 @@ func (pr *PdfReader) readValue(r *bufio.Reader, t string) (*PdfValue, error) {
 			if t2 != "" {
 				if is_numeric(t2) {
 					// Two numeric tokens in a row.
-					// In this case, we're probably in front of either an object reference
+					// In pr case, we're probably in front of either an object reference
 					// or an object specification.
 					// Determine the case and return the data.
 					t3, err := pr.readToken(r)
@@ -418,7 +417,7 @@ func (pr *PdfReader) readValue(r *bufio.Reader, t string) (*PdfValue, error) {
 							return result, nil
 						}
 
-						// If we get to this point, that numeric value up there was just a numeric value.
+						// If we get to pr point, that numeric value up there was just a numeric value.
 						// Push the extra tokens back into the stack and return the value.
 						pr.stack = append(pr.stack, t3)
 					}
@@ -596,18 +595,18 @@ func (pr *PdfReader) resolveObject(objSpec *PdfValue) (*PdfValue, error) {
 	r := bufio.NewReader(pr.f)
 
 	if objSpec.Type == PDF_TYPE_OBJREF {
-		// This is a reference, resolve it.
+		// pr is a reference, resolve it.
 		offset := pr.xref[objSpec.Id][objSpec.Gen]
 
 		if _, ok := pr.xref[objSpec.Id]; !ok {
-			// This may be a compressed object
+			// pr may be a compressed object
 			return pr.resolveCompressedObject(objSpec)
 		}
 
 		// Save current file position
-		// This is needed if you want to resolve reference while you're reading another object.
+		// pr is needed if you want to resolve reference while you're reading another object.
 		// (e.g.: if you need to determine the length of a stream)
-		old_pos, err = pr.f.Seek(0, os.SEEK_CUR)
+		old_pos, err = pr.f.Seek(0, io.SeekCurrent)
 		if err != nil {
 			return nil, errors.Wrap(err, "Failed to get current position of file")
 		}
@@ -820,7 +819,7 @@ func (pr *PdfReader) readXref() error {
 		return errors.Wrap(err, "Failed to read token")
 	}
 	if t != "xref" {
-		// Maybe this is an XRef stream ...
+		// Maybe pr is an XRef stream ...
 		v, err := pr.readValue(r, t)
 		if err != nil {
 			return errors.Wrap(err, "Failed to read XRef stream")
@@ -875,7 +874,7 @@ func (pr *PdfReader) readXref() error {
 
 					index := make([]int, 2)
 
-					// If /Index is not set, this is an error
+					// If /Index is not set, pr is an error
 					if _, ok := v.Dictionary["/Index"]; ok {
 						if len(v.Dictionary["/Index"].Array) < 2 {
 							return errors.Wrap(err, "Index array does not contain 2 elements")
@@ -974,9 +973,9 @@ func (pr *PdfReader) readXref() error {
 					}
 					defer z.Close()
 
-					p, err := ioutil.ReadAll(z)
+					p, err := io.ReadAll(z)
 					if err != nil {
-						return errors.Wrap(err, "ioutil.ReadAll error")
+						return errors.Wrap(err, "io.ReadAll error")
 					}
 
 					objPos := 0
@@ -1224,7 +1223,7 @@ func (pr *PdfReader) readPages() error {
 		return errors.Wrap(err, "Failed to resolve pages object")
 	}
 
-	// This will normally return itself
+	// pr will normally return itself
 	kids, err := pr.resolveObject(pagesDict.Value.Dictionary["/Kids"])
 	if err != nil {
 		return errors.Wrap(err, "Failed to resolve kids object")
@@ -1347,7 +1346,7 @@ func (pr *PdfReader) getContent(pageno int) (string, error) {
 	// Get page
 	page := pr.pages[pageno-1]
 
-	// FIXME: This could be slow, converting []byte to string and appending many times
+	// FIXME: pr could be slow, converting []byte to string and appending many times
 	buffer := ""
 
 	// Check to make sure /Contents exists in page dictionary
@@ -1366,7 +1365,7 @@ func (pr *PdfReader) getContent(pageno int) (string, error) {
 				return "", errors.Wrap(err, "Failed to rebuild content stream")
 			}
 
-			// FIXME:  This is probably slow
+			// FIXME:  pr is probably slow
 			buffer += string(tmpBuffer)
 		}
 	}
@@ -1375,7 +1374,7 @@ func (pr *PdfReader) getContent(pageno int) (string, error) {
 }
 
 // Rebuild content stream
-// This will decode content if one or more /Filter (such as FlateDecode) is specified.
+// pr will decode content if one or more /Filter (such as FlateDecode) is specified.
 // If there are multiple filters, they will be decoded in the order in which they were specified.
 func (pr *PdfReader) rebuildContentStream(content *PdfValue) ([]byte, error) {
 	var err error
@@ -1416,10 +1415,7 @@ func (pr *PdfReader) rebuildContentStream(content *PdfValue) ([]byte, error) {
 		case "/FlateDecode":
 			// Uncompress zlib compressed data
 			var out bytes.Buffer
-			zlibReader, err := zlib.NewReader(bytes.NewBuffer(stream))
-			if err != nil {
-				return nil, errors.Wrap(err, "Failed to create zlib reader")
-			}
+			zlibReader, _ := zlib.NewReader(bytes.NewBuffer(stream))
 			defer zlibReader.Close()
 			io.Copy(&out, zlibReader)
 
@@ -1621,7 +1617,7 @@ func (pr *PdfReader) read() error {
 			return errors.Wrap(err, "Failed to to read pages")
 		}
 
-		// Now that this has been read, do not read again
+		// Now that pr has been read, do not read again
 		pr.alreadyRead = true
 	}
 
