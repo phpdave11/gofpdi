@@ -6,11 +6,10 @@ import (
 	"compress/zlib"
 	"crypto/sha1"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math"
 	"os"
-
-	"github.com/pkg/errors"
 )
 
 type PdfWriter struct {
@@ -75,7 +74,7 @@ func NewPdfWriter(filename string) (*PdfWriter, error) {
 		var err error
 		f, err := os.Create(filename)
 		if err != nil {
-			return nil, errors.Wrap(err, "Unable to create filename: "+filename)
+			return nil, fmt.Errorf("Unable to create filename: : %w"+filename, err)
 		}
 		writer.f = f
 		writer.w = bufio.NewWriter(f)
@@ -123,7 +122,7 @@ func (this *PdfWriter) ImportPage(reader *PdfReader, pageno int, boxName string)
 	// Get all page boxes
 	pageBoxes, err := reader.getPageBoxes(1, this.k)
 	if err != nil {
-		return -1, errors.Wrap(err, "Failed to get page boxes")
+		return -1, fmt.Errorf("Failed to get page boxes: %w", err)
 	}
 
 	// If requested box name does not exist for this page, use an alternate box
@@ -138,17 +137,17 @@ func (this *PdfWriter) ImportPage(reader *PdfReader, pageno int, boxName string)
 	// If the requested box name or an alternate box name cannot be found, trigger an error
 	// TODO: Improve error handling
 	if _, ok := pageBoxes[boxName]; !ok {
-		return -1, errors.New("Box not found: " + boxName)
+		return -1, fmt.Errorf("Box not found: %s", boxName)
 	}
 
 	pageResources, err := reader.getPageResources(pageno)
 	if err != nil {
-		return -1, errors.Wrap(err, "Failed to get page resources")
+		return -1, fmt.Errorf("Failed to get page resources: %w", err)
 	}
 
 	content, err := reader.getContent(pageno)
 	if err != nil {
-		return -1, errors.Wrap(err, "Failed to get content")
+		return -1, fmt.Errorf("Failed to get content: %w", err)
 	}
 
 	// Set template values
@@ -166,7 +165,7 @@ func (this *PdfWriter) ImportPage(reader *PdfReader, pageno int, boxName string)
 	// Set template rotation
 	rotation, err := reader.getPageRotation(pageno)
 	if err != nil {
-		return -1, errors.Wrap(err, "Failed to get page rotation")
+		return -1, fmt.Errorf("Failed to get page rotation: %w", err)
 	}
 	angle := rotation.Int % 360
 
@@ -455,7 +454,7 @@ func (this *PdfWriter) PutFormXobjects(reader *PdfReader) (map[string]*PdfObject
 		// then from dependencies of those resources).
 		err = this.putImportedObjects(reader)
 		if err != nil {
-			return nil, errors.Wrap(err, "Failed to put imported objects")
+			return nil, fmt.Errorf("Failed to put imported objects: %w", err)
 		}
 	}
 
@@ -484,7 +483,7 @@ func (this *PdfWriter) putImportedObjects(reader *PdfReader) error {
 
 			nObj, err = reader.resolveObject(v)
 			if err != nil {
-				return errors.Wrap(err, "Unable to resolve object")
+				return fmt.Errorf("Unable to resolve object: %w", err)
 			}
 
 			// New object with "NewId" field
