@@ -851,19 +851,19 @@ func (this *PdfReader) readXref() error {
 					// Check for /DecodeParms
 					paethDecode := false
 					if _, ok := v.Dictionary["/DecodeParms"]; ok {
-						columns := 0
-						predictor := 0
+						// columns := 0
+						// predictor := 0
 
-						if _, ok2 := v.Dictionary["/DecodeParms"].Dictionary["/Columns"]; ok2 {
-							columns = v.Dictionary["/DecodeParms"].Dictionary["/Columns"].Int
-						}
-						if _, ok2 := v.Dictionary["/DecodeParms"].Dictionary["/Predictor"]; ok2 {
-							predictor = v.Dictionary["/DecodeParms"].Dictionary["/Predictor"].Int
-						}
+						// if _, ok2 := v.Dictionary["/DecodeParms"].Dictionary["/Columns"]; ok2 {
+						// 	columns = v.Dictionary["/DecodeParms"].Dictionary["/Columns"].Int
+						// }
+						// if _, ok2 := v.Dictionary["/DecodeParms"].Dictionary["/Predictor"]; ok2 {
+						// 	predictor = v.Dictionary["/DecodeParms"].Dictionary["/Predictor"].Int
+						// }
 
-						if columns > 4 || predictor > 12 {
-							return errors.New("Unsupported /DecodeParms - only tested with /Columns <= 4 and /Predictor <= 12")
-						}
+						// if columns > 4 || predictor > 12 {
+						// 	return errors.New("Unsupported /DecodeParms - only tested with /Columns <= 4 and /Predictor <= 12")
+						// }
 						paethDecode = true
 					}
 
@@ -999,6 +999,7 @@ func (this *PdfReader) readXref() error {
 					lastFieldSize := v.Dictionary["/W"].Array[2].Int
 
 					fieldSize := firstFieldSize + middleFieldSize + lastFieldSize
+					column := fieldSize
 					if paethDecode {
 						fieldSize++
 					}
@@ -1020,36 +1021,55 @@ func (this *PdfReader) readXref() error {
 							copy(prevRow, result)
 						}
 
-						objectData := make([]byte, fieldSize)
+						objectData := make([]byte, column)
 						if paethDecode {
 							copy(objectData, result[1:fieldSize])
 						} else {
 							copy(objectData, result[0:fieldSize])
 						}
 
-						if objectData[0] == 1 {
+						switch objectData[0] {
+						case 1:
 							// Regular objects
 							b := make([]byte, 4)
-							copy(b[4-middleFieldSize:], objectData[1:1+middleFieldSize])
+							b2 := make([]byte, 4)
+							copy(b[4-middleFieldSize:], objectData[firstFieldSize:firstFieldSize+middleFieldSize])
+							copy(b2[4-lastFieldSize:], objectData[column-lastFieldSize:])
 
 							objPos = int(binary.BigEndian.Uint32(b))
-							objGen = int(objectData[firstFieldSize+middleFieldSize])
+							objGen = int(binary.BigEndian.Uint32(b2))
+							// Append map[int]int
+							this.xref[i] = make(map[int]int, 1)
+
+							// Set object id, generation, and position
+							this.xref[i][objGen] = objPos
+						case 2:
+							// Compressed objects
+							b := make([]byte, 4)
+							b2 := make([]byte, 4)
+							copy(b[4-middleFieldSize:], objectData[firstFieldSize:firstFieldSize+middleFieldSize])
+							copy(b2[4-lastFieldSize:], objectData[column-lastFieldSize:])
+
+							objId := int(binary.BigEndian.Uint32(b))
+							objIdx := int(binary.BigEndian.Uint32(b2))
+
+							// object id (i) is located in StmObj (objId) at index (objIdx)
+							this.xrefStream[i] = [2]int{objId, objIdx}
+						case 0:
+							//
+							b := make([]byte, 4)
+							b2 := make([]byte, 4)
+							copy(b[4-middleFieldSize:], objectData[firstFieldSize:firstFieldSize+middleFieldSize])
+							copy(b2[4-lastFieldSize:], objectData[column-lastFieldSize:])
+
+							objPos = int(binary.BigEndian.Uint32(b))
+							objGen = int(binary.BigEndian.Uint32(b2))
 
 							// Append map[int]int
 							this.xref[i] = make(map[int]int, 1)
 
 							// Set object id, generation, and position
 							this.xref[i][objGen] = objPos
-						} else if objectData[0] == 2 {
-							// Compressed objects
-							b := make([]byte, 4)
-							copy(b[4-middleFieldSize:], objectData[1:1+middleFieldSize])
-
-							objId := int(binary.BigEndian.Uint32(b))
-							objIdx := int(objectData[firstFieldSize+middleFieldSize])
-
-							// object id (i) is located in StmObj (objId) at index (objIdx)
-							this.xrefStream[i] = [2]int{objId, objIdx}
 						}
 
 						i++
