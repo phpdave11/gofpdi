@@ -14,6 +14,7 @@ type Importer struct {
 	tplN          int
 	writer        *PdfWriter
 	importedPages map[string]int
+	writerCount   int
 }
 
 type TplInfo struct {
@@ -59,6 +60,7 @@ func (this *Importer) init() {
 	this.tplMap = make(map[int]*TplInfo, 0)
 	this.writer, _ = NewPdfWriter("")
 	this.importedPages = make(map[string]int, 0)
+	this.writerCount = 0
 }
 
 func (this *Importer) SetSourceFile(f string) {
@@ -83,6 +85,8 @@ func (this *Importer) SetSourceFile(f string) {
 		// Make the next writer start template numbers at this.tplN
 		writer.SetTplIdOffset(this.tplN)
 		this.writers[this.sourceFile] = writer
+		writer.uid = this.writerCount
+		this.writerCount++
 	}
 }
 

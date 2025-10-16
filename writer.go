@@ -33,6 +33,7 @@ type PdfWriter struct {
 	current_obj_id  int
 	tpl_id_offset   int
 	use_hash        bool
+	uid             int
 }
 
 type PdfObjectId struct {
@@ -380,7 +381,7 @@ func (this *PdfWriter) PutFormXobjects(reader *PdfReader) (map[string]*PdfObject
 		pdfObjId := new(PdfObjectId)
 		pdfObjId.id = cN
 		pdfObjId.hash = this.shaOfInt(cN)
-		result[fmt.Sprintf("/GOFPDITPL%d", i+this.tpl_id_offset)] = pdfObjId
+		result[fmt.Sprintf("/GOFPDITPL%d-%d", this.uid, i+this.tpl_id_offset)] = pdfObjId
 
 		this.out("<<" + filter + "/Type /XObject")
 		this.out("/Subtype /Form")
@@ -564,5 +565,5 @@ func (this *PdfWriter) UseTemplate(tplid int, _x float64, _y float64, _w float64
 	tData["ty"] = (0 - _y - _h)
 	tData["lty"] = (0 - _y - _h) - (0-h)*(_h/h)
 
-	return fmt.Sprintf("/GOFPDITPL%d", tplid+this.tpl_id_offset), tData["scaleX"], tData["scaleY"], tData["tx"] * this.k, tData["ty"] * this.k
+	return fmt.Sprintf("/GOFPDITPL%d-%d", this.uid, tplid+this.tpl_id_offset), tData["scaleX"], tData["scaleY"], tData["tx"] * this.k, tData["ty"] * this.k
 }
