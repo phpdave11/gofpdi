@@ -151,6 +151,24 @@ func (this *PdfReader) skipWhitespace(r *bufio.Reader) error {
 	return nil
 }
 
+// Advance reader so that whitespace within a stream is ignored
+func (this *PdfReader) skipStreamWhitespace(r *bufio.Reader) error {
+	b, err := r.ReadByte()
+	if err != nil {
+		return errors.Wrap(err, "Failed to read byte")
+	}
+	if b == '\r' {
+		b2, err := r.ReadByte()
+		if err == nil && b2 != '\n' {
+			r.UnreadByte()
+		}
+	} else if b != '\n' {
+		// No EOL where expected; put it back or handle as error
+		r.UnreadByte()
+	}
+	return nil
+}
+
 // Read a token
 func (this *PdfReader) readToken(r *bufio.Reader) (string, error) {
 	var err error
@@ -669,7 +687,7 @@ func (this *PdfReader) resolveObject(objSpec *PdfValue) (*PdfValue, error) {
 		if token == "stream" {
 			result.Type = PDF_TYPE_STREAM
 
-			err = this.skipWhitespace(r)
+			err = this.skipStreamWhitespace(r)
 			if err != nil {
 				return nil, errors.Wrap(err, "Failed to skip whitespace")
 			}
@@ -940,7 +958,7 @@ func (this *PdfReader) readXref() error {
 						return errors.New("Expected next token to be: stream, got: " + t)
 					}
 
-					err = this.skipWhitespace(r)
+					err = this.skipStreamWhitespace(r)
 					if err != nil {
 						return errors.Wrap(err, "Failed to skip whitespace")
 					}
