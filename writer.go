@@ -469,20 +469,8 @@ func (this *PdfWriter) putImportedObjects(reader *PdfReader) error {
 
 	// obj_stack will have new items added to it in the inner loop, so do another loop to check for extras
 	// TODO make the order of this the same every time
-	for {
-		atLeastOne := false
-
-		// FIXME:  How to determine number of objects before this loop?
-		for i := 0; i < 9999; i++ {
-			k := i
-			v := this.obj_stack[i]
-
-			if v == nil {
-				continue
-			}
-
-			atLeastOne = true
-
+	for len(this.obj_stack) > 0 {
+		for k, v := range this.obj_stack {
 			nObj, err = reader.resolveObject(v)
 			if err != nil {
 				return errors.Wrap(err, "Unable to resolve object")
@@ -500,11 +488,7 @@ func (this *PdfWriter) putImportedObjects(reader *PdfReader) error {
 			this.endObj()
 
 			// Remove from stack
-			this.obj_stack[k] = nil
-		}
-
-		if !atLeastOne {
-			break
+			delete(this.obj_stack, k)
 		}
 	}
 
