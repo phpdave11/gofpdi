@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"sort"
 
 	"github.com/pkg/errors"
 )
@@ -467,10 +468,16 @@ func (this *PdfWriter) putImportedObjects(reader *PdfReader) error {
 	var err error
 	var nObj *PdfValue
 
-	// obj_stack will have new items added to it in the inner loop, so do another loop to check for extras
-	// TODO make the order of this the same every time
+	// obj_stack will have new items added to it in the inner loop, so do another loop to check for extras.
+	// Iterate in ascending key order so output is deterministic across runs.
 	for len(this.obj_stack) > 0 {
-		for k, v := range this.obj_stack {
+		keys := make([]int, 0, len(this.obj_stack))
+		for k := range this.obj_stack {
+			keys = append(keys, k)
+		}
+		sort.Ints(keys)
+		for _, k := range keys {
+			v := this.obj_stack[k]
 			nObj, err = reader.resolveObject(v)
 			if err != nil {
 				return errors.Wrap(err, "Unable to resolve object")
