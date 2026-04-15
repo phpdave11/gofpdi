@@ -111,6 +111,8 @@ func (this *Importer) SetSourceStream(rs *io.ReadSeeker) {
 		// Make the next writer start template numbers at this.tplN
 		writer.SetTplIdOffset(this.tplN)
 		this.writers[this.sourceFile] = writer
+		writer.uid = this.writerCount
+		this.writerCount++
 	}
 }
 
