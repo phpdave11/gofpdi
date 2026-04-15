@@ -1445,7 +1445,7 @@ func (this *PdfReader) rebuildContentStream(content *PdfValue) ([]byte, error) {
 				return nil, err
 			}
 		default:
-			return nil, errors.New("Unspported filter: " + filters[i].Token)
+			return nil, errors.New("Unsupported filter: " + filters[i].Token)
 		}
 	}
 
@@ -1457,7 +1457,9 @@ func uncompressASCII85(compressed []byte) ([]byte, error) {
 	compressed = adobeASCII85.ReplaceAll(compressed, []byte{})
 	var out bytes.Buffer
 	reader := ascii85.NewDecoder(bytes.NewBuffer(compressed))
-	io.Copy(&out, reader)
+	if _, err := io.Copy(&out, reader); err != nil {
+		return nil, err
+	}
 	return out.Bytes(), nil
 }
 
