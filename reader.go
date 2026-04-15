@@ -4,16 +4,20 @@ import (
 	"bufio"
 	"bytes"
 	"compress/zlib"
+	"encoding/ascii85"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
 	"os"
+	"regexp"
 	"strconv"
 
 	"github.com/pkg/errors"
 )
+
+var adobeASCII85 = regexp.MustCompile(`<~|~>`)
 
 type PdfReader struct {
 	availableBoxes []string
@@ -1436,12 +1440,25 @@ func (this *PdfReader) rebuildContentStream(content *PdfValue) ([]byte, error) {
 
 			// Set stream to uncompressed data
 			stream = out.Bytes()
+		case "/ASCII85Decode":
+			if stream, err = uncompressASCII85(stream); err != nil {
+				return nil, err
+			}
 		default:
 			return nil, errors.New("Unspported filter: " + filters[i].Token)
 		}
 	}
 
 	return stream, nil
+}
+
+func uncompressASCII85(compressed []byte) ([]byte, error) {
+	// compressed stream may contain <~ and ~> which are not standard ASCII85. Remove them before decoding
+	compressed = adobeASCII85.ReplaceAll(compressed, []byte{})
+	var out bytes.Buffer
+	reader := ascii85.NewDecoder(bytes.NewBuffer(compressed))
+	io.Copy(&out, reader)
+	return out.Bytes(), nil
 }
 
 func (this *PdfReader) getNumPages() (int, error) {
