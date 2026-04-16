@@ -4,16 +4,20 @@ import (
 	"bufio"
 	"bytes"
 	"compress/zlib"
+	"encoding/ascii85"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math"
 	"os"
+	"regexp"
 	"strconv"
 
 	"github.com/pkg/errors"
 )
+
+var adobeASCII85 = regexp.MustCompile(`<~|~>`)
 
 type PdfReader struct {
 	availableBoxes []string
@@ -148,6 +152,24 @@ func (this *PdfReader) skipWhitespace(r *bufio.Reader) error {
 		}
 	}
 
+	return nil
+}
+
+// Advance reader so that whitespace within a stream is ignored
+func (this *PdfReader) skipStreamWhitespace(r *bufio.Reader) error {
+	b, err := r.ReadByte()
+	if err != nil {
+		return errors.Wrap(err, "Failed to read byte")
+	}
+	if b == '\r' {
+		b2, err := r.ReadByte()
+		if err == nil && b2 != '\n' {
+			r.UnreadByte()
+		}
+	} else if b != '\n' {
+		// No EOL where expected; put it back or handle as error
+		r.UnreadByte()
+	}
 	return nil
 }
 
@@ -669,7 +691,7 @@ func (this *PdfReader) resolveObject(objSpec *PdfValue) (*PdfValue, error) {
 		if token == "stream" {
 			result.Type = PDF_TYPE_STREAM
 
-			err = this.skipWhitespace(r)
+			err = this.skipStreamWhitespace(r)
 			if err != nil {
 				return nil, errors.Wrap(err, "Failed to skip whitespace")
 			}
@@ -940,7 +962,7 @@ func (this *PdfReader) readXref() error {
 						return errors.New("Expected next token to be: stream, got: " + t)
 					}
 
-					err = this.skipWhitespace(r)
+					err = this.skipStreamWhitespace(r)
 					if err != nil {
 						return errors.Wrap(err, "Failed to skip whitespace")
 					}
@@ -1436,12 +1458,27 @@ func (this *PdfReader) rebuildContentStream(content *PdfValue) ([]byte, error) {
 
 			// Set stream to uncompressed data
 			stream = out.Bytes()
+		case "/ASCII85Decode":
+			if stream, err = uncompressASCII85(stream); err != nil {
+				return nil, err
+			}
 		default:
-			return nil, errors.New("Unspported filter: " + filters[i].Token)
+			return nil, errors.New("Unsupported filter: " + filters[i].Token)
 		}
 	}
 
 	return stream, nil
+}
+
+func uncompressASCII85(compressed []byte) ([]byte, error) {
+	// compressed stream may contain <~ and ~> which are not standard ASCII85. Remove them before decoding
+	compressed = adobeASCII85.ReplaceAll(compressed, []byte{})
+	var out bytes.Buffer
+	reader := ascii85.NewDecoder(bytes.NewBuffer(compressed))
+	if _, err := io.Copy(&out, reader); err != nil {
+		return nil, err
+	}
+	return out.Bytes(), nil
 }
 
 func (this *PdfReader) getNumPages() (int, error) {
