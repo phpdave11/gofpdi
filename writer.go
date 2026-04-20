@@ -123,7 +123,7 @@ func (this *PdfWriter) ImportPage(reader *PdfReader, pageno int, boxName string)
 	this.k = 1
 
 	// Get all page boxes
-	pageBoxes, err := reader.getPageBoxes(1, this.k)
+	pageBoxes, err := reader.getPageBoxes(pageno, this.k)
 	if err != nil {
 		return -1, errors.Wrap(err, "Failed to get page boxes")
 	}

@@ -529,7 +529,10 @@ func (this *PdfReader) resolveCompressedObject(objSpec *PdfValue) (*PdfValue, er
 		// Decompress if filter is /FlateDecode
 		// Uncompress zlib compressed data
 		var out bytes.Buffer
-		zlibReader, _ := zlib.NewReader(bytes.NewBuffer(compressedObj.Stream.Bytes))
+		zlibReader, err := zlib.NewReader(bytes.NewBuffer(compressedObj.Stream.Bytes))
+		if err != nil {
+			return nil, errors.Wrap(err, "Failed to uncompress data")
+		}
 		defer zlibReader.Close()
 		io.Copy(&out, zlibReader)
 
@@ -1452,7 +1455,10 @@ func (this *PdfReader) rebuildContentStream(content *PdfValue) ([]byte, error) {
 		case "/FlateDecode":
 			// Uncompress zlib compressed data
 			var out bytes.Buffer
-			zlibReader, _ := zlib.NewReader(bytes.NewBuffer(stream))
+			zlibReader, err := zlib.NewReader(bytes.NewBuffer(stream))
+			if err != nil {
+				return nil, errors.Wrap(err, "Failed to uncompress data")
+			}
 			defer zlibReader.Close()
 			io.Copy(&out, zlibReader)
 
