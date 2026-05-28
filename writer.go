@@ -115,6 +115,22 @@ func (this *PdfWriter) ClearImportedObjects() {
 	this.written_objs = make(map[*PdfObjectId][]byte, 0)
 }
 
+func getValidBoxName(boxes map[string]map[string]float64, name string) string {
+	if bm, ok := boxes[name]; !ok || len(bm) == 0 {
+		switch name {
+		case "/ArtBox":
+			return getValidBoxName(boxes, "/TrimBox")
+		case "/TrimBox":
+			return getValidBoxName(boxes, "/BleedBox")
+		case "/BleedBox":
+			return getValidBoxName(boxes, "/CropBox")
+		case "/CropBox":
+			return "/MediaBox"
+		}
+	}
+	return name
+}
+
 // Create a PdfTemplate object from a page number (e.g. 1) and a boxName (e.g. MediaBox)
 func (this *PdfWriter) ImportPage(reader *PdfReader, pageno int, boxName string) (int, error) {
 	var err error
@@ -129,13 +145,7 @@ func (this *PdfWriter) ImportPage(reader *PdfReader, pageno int, boxName string)
 	}
 
 	// If requested box name does not exist for this page, use an alternate box
-	if _, ok := pageBoxes[boxName]; !ok {
-		if boxName == "/BleedBox" || boxName == "/TrimBox" || boxName == "ArtBox" {
-			boxName = "/CropBox"
-		} else if boxName == "/CropBox" {
-			boxName = "/MediaBox"
-		}
-	}
+	boxName = getValidBoxName(pageBoxes, boxName)
 
 	// If the requested box name or an alternate box name cannot be found, trigger an error
 	// TODO: Improve error handling
